@@ -242,7 +242,7 @@ Monitoring
        └──► Alertmanager ──► SNS fdr-alerts ──► email
 ```
 
-Full step-by-step procedure: [RUNBOOK_AWS.md](RUNBOOK_AWS.md).
+Full step-by-step procedure: [AWS_deployment.md](AWS_deployment.md).
 
 ## Testing
 
