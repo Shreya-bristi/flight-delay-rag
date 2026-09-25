@@ -15,7 +15,7 @@ cites its source. I focused primarily on US domestic and Europe bound operations
   New York → London owes no fixed compensation. Getting that wrong is the most expensive mistake
   the bot can make, so jurisdiction is resolved deterministically from the departure airport,
   and the governing law gets a guaranteed place in the model's context.
--**overnmnet law and airline promises are kept apart.** regulations say what a passenger is *entitled*
+-**Governmnet law and airline promises are kept apart.** regulations say what a passenger is *entitled*
   to; contracts of carriage say what the airline *promised*. Retrieval
   reserves slots for both, and every source is labelled LAW or AIRLINE in the prompt.
 -**Ask, never guess.** If a question leaves out the detail that decides which law applies
