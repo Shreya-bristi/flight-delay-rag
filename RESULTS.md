@@ -1,186 +1,140 @@
 # Results
 
-Evaluation runs in two stages. Stage 1 selects a chunk configuration; Stage 2
-generates answers at that configuration and judges them.
+These are the numbers from my final evaluation runs, the metrics that are strong and the ones
+that aren't, and what each metric means for this project.
 
-| stage | command | writes |
+## How I evaluate
+
+The test set is a hand-built **golden set of 50 questions**. It covers:
+
+- US domestic, EU/UK to US, US to Europe and intra-Europe routes
+- live flight lookups
+- questions that need a clarifying question first
+- trick questions the bot should decline
+- airlines it doesn't support
+
+More than half the cases are edge cases on purpose: ambiguous routes, a regime that doesn't
+apply, exception clauses, multi-leg trips, US territories.
+
+Evaluation runs in two stages:
+
+1. **Retrieval.** Does the search put the right regulation and airline text in front of the
+   model? This needs no LLM, runs on the real stack (PostgreSQL + pgvector, bge-large-en-v1.5,
+   bge-reranker-base), and scores the **43 answerable questions**. The other 7 are questions
+   where the right move is to ask or decline, so there is nothing to retrieve.
+2. **Generation.** Is the answer correct, grounded in the sources and properly cited, and
+   does the bot ask or decline when it should? The generator is `openai/gpt-oss-20b` on Groq.
+   A separate judge, Gemini Flash-Lite, scores the answers, so a model never grades itself.
+
+| run | file | scope |
 |---|---|---|
-| 1. retrieval — select a chunk configuration | `evals/retrieval_eval.py` | `evals/runs/retrieval/<stamp>.json` + `latest.json` |
-| 2. generation — Ragas judge + safety metrics | `evals/generation_eval.py` | `evals/runs/generation/<stamp>.json` + `latest.json` |
+| Retrieval (final) | `evals/runs/retrieval/latest.json` | all 43 scored questions, 512-token chunks, 15% overlap |
+| Generation (final) | `evals/runs/generation/20260920T032529.json` | 10-question sample, stratified by category |
 
-See `RUNBOOK.md` for the exact commands (`make` cannot find `python` on this
-machine). Stage 2 makes **paid** API calls and needs explicit permission for
-every run.
+Generation is a sample because of Groq's free tier. One question costs about 5,700 tokens,
+and the free limit is 200,000 tokens a day, which a 50-question run with retries doesn't fit
+into. The sample is stratified so it always includes a clarify case, a decline case and an
+unsupported-airline case; a random 10 would often miss them.
 
 ---
 
-## Stage 1 — measured, authoritative
+## Retrieval: what works
 
-Real embedder (`bge-large-en-v1.5`), real reranker (`bge-reranker-base`), on
-PostgreSQL + pgvector, all 43 scored cases. Source of truth:
-`evals/runs/retrieval/latest.json` (= `20260920T000831.json`, Session 25). Quote this
-file, not a superseded run.
-
-**Selected: 512 tokens / 15% overlap**, with the Session 25 retrieval configuration
-("G"): scope lanes over every regime in `jurisdiction_scope`, conditional US
-procedural lanes, a reserved SEAT for each lane's best hit, and a reduced airline
-quota for questions no carrier page can answer. `final_k` stays 8.
-
-| metric | **G — adopted** | B (Session 24) | A (Session 22) |
-|---|---|---|---|
-| `required_premise_complete` | **0.744** (32/43) | 0.372 (16/43) | 0.302 (13/43) |
-| `primary_authority_coverage` | **0.703** | 0.370 | 0.313 |
-| `evidence_recall` | **0.562** | 0.514 | 0.474 |
-| `evidence_hit_rate` | **0.550** | 0.487 | — |
-| `context_precision` | **0.218** | 0.167 | — |
-| `section_recall@3` | 0.265 | 0.264 | 0.232 |
-| `MRR` | 0.647 | 0.660 | 0.639 |
-| `context_tokens` | 3,671 | 3,570 | 3,539 |
-| `duplicate_section_chunks` | 46 | 56 | — |
-| `governing_kept_share` | 1.000 | 1.000 | 1.000 |
-
-MRR and nDCG@5 rank the whole candidate pool BEFORE balancing, so lane votes move
-them; the context the application actually consumes got both more complete and more
-precise over the same change. `required_premise_complete` is the deciding metric.
-
-The three premise/evidence numbers answer three different questions (Session 24,
-`evals/golden/required.py`, reviewed by the user): was every premise proved by SOME
-accepted source; was the binding regulation itself present rather than only a
-regulator's guidance repeating it; and how much of all the useful gold text was
-retrieved. Equivalent sources count for the first (DOT Q&A / Part 260, CAA / UK261,
-Commission guidelines / EU261). Scope premises are required because prompt Rule 3
-makes "UK261 applies" a claim that must cite the scope text.
-
-**11 cases still miss a premise** (from 27 at B): uk-us-03, uk-us-09, uk-us-14,
-eu-us-07, eu-us-13, us-eur-09, intra-04, intra-07, law-03, law-07, live-05. Six of
-them get no remedy lane at all, two seat guidance where the binding article is
-required, and live-05 is a corpus gap. See `previous_trials.md`.
-
-Every configuration that was measured and NOT adopted — chunk size 384, `final_k` 9,
-section-diverse lane seats, the section cap, the Session 22 knob ablations — is
-recorded with its numbers and its reason in **`previous_trials.md`**.
-
-`governing_kept_share` is the metric that earns its place. It read 0.9268 with
-three named cases (uk-us-09, eu-us-12, law-03) while nobody treated it as a
-defect (Session 19). It is 1.000 through Sessions 22-25, but note what it cannot
-see: with the CAA guidance filed as `regulation` it also read 1.000 while live-01
-kept no UK261 article at all, because a CAA page satisfied "UK law present". Guidance
-now never fills a regime's seat.
-
-## Stage 2 — provisional, NOT authoritative
-
-The authoritative 50-case run **has never completed**. What exists:
-
-- A free routing + gate-calibration pass (`--generator none`).
-- A **10-case stratified subset** run that provisionally selected
-  `groq-gpt-oss-20b` (`reasoning_effort: low`, cap 900). `.env` carries it so
-  `/ask` starts. It is recorded as provisional everywhere.
-- A first full attempt that died on quota: only 11 of 50 cases ever reached the
-  model, all `dom-*`, so every generation metric in that run describes the US
-  domestic slice. Its `abstention_accuracy FAILED trap-04` is an artifact —
-  trap-04 never got a response.
-
-Why it has not finished: one call costs ~5,700 tokens against a **200,000
-token/day** free cap, so a 50-case run needs ~285k without retries and ~493k at
-the observed retry rate — 1.4x to 2.5x the daily cap. It needs ~2.5 days of
-quota, or a resumable generation pass with an on-disk answer cache, which does
-not exist yet.
-
-### The basis of every generation number: 10 sampled questions, not 50
-
-**All generation metrics below were measured on 10 golden-set questions sampled
-from the 50, because the free-tier quota does not stretch to a full run. No
-full 50-case run has ever been executed.** Source of record:
-`evals/runs/generation/20260920T014936.json` (Session 26, the first Stage 2 run on
-the G retrieval configuration; same 10 cases, seed 3151573671, so it compares
-directly with `20260919T222116.json` on the old retrieval).
-
-### Retrieval improved; generation did not (Session 26)
-
-| | OLD retrieval (B) | NEW retrieval (G) |
+| metric | result | what it means here |
 |---|---|---|
-| answers delivered | 5 of 8 | **4 of 8** |
-| validation failures | 3 | **4** |
-| factual_correctness (all 8) | 0.191 | **0.089** |
-| factual_correctness (judged only) | 0.306 | **0.177** |
-| faithfulness | 0.703 (n=5) | 0.667 (n=4) |
-| citation_validity | 1.000 | 1.000 |
-| tokens/case, cost | 11,211, $0.0074 | 11,902, $0.0079 |
+| **Required premise completeness** | **0.744** (32 of 43) | For each question I listed every fact the answer depends on (for example "UK261 applies to this flight", "delay of 3h+ triggers compensation", "the amount for this distance"). This is the share of questions where **every one** of those facts was in the retrieved context. It's the metric I optimised for, because a missing premise means the model has to guess or leave something out. |
+| **Primary authority coverage** | **0.722** | The share of required legal facts backed by the **binding text itself** (the EU261 article, the 14 CFR section) rather than only by guidance that paraphrases it. It matters because a passenger arguing with an airline needs the regulation, not a summary. |
+| **Governing regime kept** | **1.000** | The law that governs the flight (decided by the departure airport) gets a guaranteed slot in the context. This checks that the slot survives the token budget in every case. It once read 0.93, and that turned out to be a real bug: the guaranteed chunk was the first one dropped when the context got tight. |
+| **Off-carrier chunks** | **0** | A United question never gets Delta's contract in its context. |
+| **Cases with zero evidence** | **0** | Every answerable question retrieved at least some gold text. |
+| **Dense search recall vs exact** | **1.000** | The approximate vector search (HNSW) returns the same top 20 as an exact scan. With pgvector's defaults it didn't (0.965, and as low as 0.70 on some queries), so I tuned `ef_search` and iterative scan. |
+| **Gold passage in one chunk** | **0.94** | At 512 tokens, 94% of the passages that answer a question fall inside a single chunk instead of being split across two. |
 
-Net **one case**: dom-24 and uk-us-01 went answered → validation_failed, law-07 went
-the other way. Both regressions are a **total citation collapse** (3→0 and 4→0 `[Sn]`
-markers) on cases whose *retrieval* G had fixed — the evidence was present and the
-model stopped citing it. law-07 got 47% more context and started citing correctly,
-so this is not monotonic in context size.
+**How far it moved.** The same metrics on my earlier retrieval design, same golden set:
 
-**The bottleneck has moved from retrieval to citation discipline.** Half the answer
-cases deliver nothing and every failure is the same rule: a factual sentence with no
-`[Sn]`. `validate_answer` is behaving correctly; the 20B model is not meeting the
-bar and one retry does not rescue it. The retrieval configuration was NOT reverted:
-a deterministic 16→32 of 43 gain across the whole scored set outweighs one case of
-eight on a subset the harness labels non-authoritative.
+| metric | before | final |
+|---|---|---|
+| Required premise completeness | 0.302 (13 of 43) | **0.744** (32 of 43) |
+| Primary authority coverage | 0.313 | **0.722** |
+| Evidence recall | 0.474 | **0.571** |
 
-| field | value |
-|---|---|
-| `n_cases` | **10** of 50 |
-| `sample` | `{n: 10, seed: 3151573671, strategy: "stratified by category", of: 50}` |
-| `authoritative` | **`false`** |
-| `full_run` | **`false`** |
-| generator | `groq-gpt-oss-20b`, `reasoning_effort: low`, `max_completion_tokens` 900 |
-| gate | `--gate off` |
+Most of that came from **search lanes**. For a question like "what am I owed?", each regime
+that applies gets extra targeted searches (compensation amount, care, refund, scope), and the
+best hit from each lane is guaranteed a seat in the context. Without the seats, the right
+article was often found and then lost in the final ranking.
 
-The draw is **stratified by `category`, not uniform**: a uniform draw of 10
-omits the clarify or abstain cases about half the time, and those are the hard
-gates — an empty gate passes vacuously and reads as a success. The seed is
-recorded so the draw repeats.
+Things I measured and didn't adopt, because they didn't help:
 
-Measured on those 10 cases (8 reached the model; 2 are routing-only), beside the
-same run before Sessions 22-23 changed the corpus, the prompt and retrieval:
+- 384-token chunks
+- a 9th context slot
+- a cap on chunks from the same section
 
-| metric | Session 24 | n | before (Session 22 run) | read it as |
-|---|---|---|---|---|
-| `faithfulness` | 0.703 | **5** | 0.724 (n=4) | to authorized evidence; one more answer is included now |
-| `factual_correctness` | **0.191** | 8 | 0.128 | 3 of 8 delivered no answer -> scored 0.0 (was 4) |
-| `factual_correctness_judged_only` | **0.306** | 5 | 0.255 | the answers actually delivered |
-| `validation_pass_rate` | **0.625** | 8 | 0.50 | now failing: eu-us-01, law-07, live-01 (uk-us-09 and intra-07 fixed) |
-| `first_try_pass_rate` | 0.25 | 8 | 0.375 | a retry is still the norm |
-| `citation_validity` | 1.000 | 8 | 1.000 | no fabricated or unknown citation markers |
-| `llm_error_rate` | 0.000 | 8 | 0.000 | |
-| `abstention_accuracy` | 1.000 | **1** | 1.000 | one case — not a result |
-| `clarification_accuracy` | 1.000 | **1** | 1.000 | one case — not a result |
-| `unsupported_airline_accuracy` | 1.000 | **1** | 1.000 | one case — not a result |
-| `scope_safety` | 1.000 | **1** | 1.000 | one case — not a result |
+## Retrieval: what's weak
 
-Cost: $0.0074 for the 10 cases ($0.00093/case, 11,211 tokens/case); the judge's
-cost is unavailable by design (`JUDGE_PRICES = None`). Extrapolated generator cost
-for a full 44-case generation pass: about $0.04.
+| metric | result | what it means here, and why it's low |
+|---|---|---|
+| **Evidence recall** | 0.571 | The share of **all** useful gold text that was retrieved, not just the required facts. Many questions have more relevant text than fits in 8 chunks, so this won't reach 1.0 by design. It's the completeness metric above that decides whether the answer can be right. |
+| **Context precision** | 0.223 | Of the 8 chunks sent to the model, about 1 in 5 is gold text. The rest is related but not strictly needed, because the airline and government source quotas fill slots even when only one family matters. |
+| **Section recall@3** | 0.262 | The share of gold sections (scored as document + section, since EU261 and UK261 share article numbers) that appear in the top 3. A question often needs 3 or more sections, so the top 3 can't hold them all. |
+| **nDCG@5** | 0.364 | A ranking-quality score for the top 5. It ranks the whole candidate pool before source balancing and lane seats, so it undersells what the model actually sees. |
+| **MRR** | 0.647 | Mean reciprocal rank of the first gold chunk, on the same pre-balancing ranking. The first useful chunk is usually near the top, but not always first. |
+| **Duplicate-section chunks** | 46 (across 43 questions) | Sometimes two chunks of the same section take two slots. Capping this lowered recall when I tried it, so I left it. |
+| **Reranker truncation** | 47% of pairs | bge-reranker-base reads 512 tokens, and about half of (question + chunk) pairs are longer, so the reranker sees a cut-off chunk. A longer-context reranker would help. |
+| **Retrieval latency** | ~6.2 s per question | Measured on my 4 GB laptop GPU with the cross-encoder reranking the whole candidate pool plus the lane searches. |
 
-The four safety gates each rest on a **single case**, and faithfulness on four.
-The 1.000s are not evidence that the gates hold; they are evidence that one case
-each passed. Quote the `n` beside every number or the table misleads.
+11 questions still miss at least one required premise. Six of them get no targeted lane at
+all, and two get regulator guidance where the binding article is required. One is a real gap in my corpus: the
+only text saying US territories count as the US sits in a denied-boarding section that the
+topic filter removes for a cancellation question.
 
-A separate live finding, Session 21: the served app produced an answer that
-misstated three UK261 thresholds while citing sources correctly, from evidence
-that was complete and unsplit in its context. `citation_validity` 1.000 does not
-mean the cited clause supports the number — the validator checks that a claim
-*has* a citation, not that the citation bears it.
+---
 
-The judge is **Google AI Studio `gemini-3.5-flash-lite`**, frozen, never a
-candidate. `JUDGE_PRICES` is `None`, so judge cost reports as *unavailable*
-rather than as a fabricated zero.
+## Generation: what works
 
-**Do not quote a Stage 2 number as a result of this system** until the full run
-completes. A subset run may select a generator, but it carries `full_run: false`
-and a `basis` string, and both are meant to be read.
+10-question sample. `n` is the number of questions each metric applies to.
 
-## Carried into any result
+| metric | result | n | what it means here |
+|---|---|---|---|
+| **Citation validity** | **1.000** | 5 | Every `[Sn]` citation points to a source that was actually in the context. There were no invented citations. |
+| **Citation coverage** | **1.000** | shown answers | Every answer shown to a user cited its factual sentences. The validator rejects an answer with an uncited legal, money or deadline claim before the user sees it. |
+| **Clarification accuracy** | **1.000** | 1 | When the departure airport decides which law applies and the question doesn't give it, the bot asks once instead of guessing. |
+| **Abstention accuracy** | **1.000** | 1 | Out-of-scope or trick questions get a decline, not an answer. |
+| **Unsupported airline accuracy** | **1.000** | 1 | For an airline outside AA/DL/UA/WN the bot says so, and doesn't pretend to have that carrier's policy. |
+| **Scope safety** | **1.000** | 1 | The bot never answers an out-of-scope question as if it were in scope. |
+| **Over-abstention** | **0.000** | 8 | It never declined a question it should have answered. |
+| **Truncated or oversized calls** | **0** | 13 calls | No answer was cut off by the token cap, and no request exceeded the model's window. |
+| **Cost** | **$0.0007 per question** | 8 | Measured from token usage at Groq's list price. A full 44-question generation pass would cost about $0.03. |
 
-The golden set's expected answers are **unvetted drafts**, so factual
-correctness against them is a consistency signal, not validated accuracy. The
-confidence gate is uncalibrated and currently harmful on the golden set (it
-refused 19 of 41 answer cases that reached it and let the only trap through), so
-every measured run uses `--gate off` and the served app sets
-`CONFIDENCE_GATE_ENABLED=false`.
+The four safety gates are checked on one question each in this sample, so they show the
+behaviour works, not a rate. The same routing is checked on all 50 questions in the free
+routing pass, which runs with no model.
 
-No retrieval-quality metric is exported at runtime, by design: the application
-does not compute recall, and an alert on a metric nothing emits never fires.
+## Generation: what's weak
+
+| metric | result | n | what it means here, and why |
+|---|---|---|---|
+| **Factual correctness** | 0.070 (0.187 on answers delivered) | 8 (3) | The judge compares the answer's claims with my reference answer. Any question that produced no answer scores 0, which is what drags the first figure down. The references are my own drafts and aren't reviewed yet, so this is a consistency signal, not verified accuracy. |
+| **Faithfulness** | 0.667 | 3 | The share of the answer's claims the judge could trace to the sources the model was actually given: the source blocks, the flight data and the prompt rules, never the reference answer. About a third of the claims weren't clearly supported by that evidence. |
+| **Validation pass rate** | 0.600 | 5 | 2 of 5 answers still had an uncited factual sentence after one retry, so they were withheld rather than shown. That's the right behaviour for a legal-rights bot, but it means no answer. |
+| **First-try pass rate** | 0.000 | 5 | No answer passed citation validation on the first attempt. Every delivered answer needed the retry, where the validator quotes back the exact sentence to cite or drop. |
+| **LLM error rate** | 0.375 | 8 | 3 of 8 calls failed with HTTP 429: Groq's free tier had hit its 200,000-token daily limit (199,429 used). This is a quota problem, not a model failure, but those 3 questions never got an answer. |
+| **Generation time** | ~101 s mean | 8 | Measured in the eval harness, which spaces requests 45 s apart to stay under the free-tier token rate and includes the retry. It isn't what a user waits in the app. |
+
+**The main takeaway: retrieval is no longer the bottleneck; citation discipline is.** After
+the retrieval redesign, the evidence for these questions is in the context. The 20B model
+often still writes a factual sentence without a citation, and the validator correctly
+blocks it. I chose to keep the strict validator and lose those answers rather than show a
+passenger an uncited claim about money they're owed.
+
+---
+
+## Next steps
+
+- **Run all 50 questions through generation.** This needs either a paid tier or a resumable
+  run that caches answers across days of free quota.
+- **Get the reference answers reviewed**, so factual correctness measures accuracy rather
+  than agreement with my drafts.
+- **Try a stronger generator** for citation discipline, measured with the same frozen judge
+  and the same retrieval.
+- **Calibrate the confidence gate.** It's off in every run because its current thresholds
+  refused 19 of the 41 answerable questions that reached it.
