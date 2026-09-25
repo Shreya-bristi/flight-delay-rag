@@ -1,22 +1,20 @@
 # Local Development
-
-How I run, index, monitor and evaluate the chatbot on my own machine. There are two ways
-to run it, and I test both:
+This is how I run, index, monitor and evaluate the chatbot on my own machine. There are two ways to run it, and I test both:
 
 - **On the host.** Fast, and uses the GPU. This is what I use day to day.
 - **In Docker Compose.** The same image the Kubernetes cluster runs. Slower (CPU only), but
   it catches container problems before they reach AWS.
 
-For the cloud deployment, see [AWS_DEPLOYMENT.md](AWS_DEPLOYMENT.md).
+For the cloud deployment, see [AWS_deployment.md](AWS_deployment.md).
 
 ## Setup
 
-You need a Python venv at `.venv`, Docker Desktop and a filled-in `.env`. An NVIDIA GPU is
+All we need`.venv`, Docker Desktop and an `.env`. An NVIDIA GPU is
 optional, but indexing takes about 100 s on a 4 GB GTX 1650 Ti against about 23 min on CPU.
 
-`.env` is the only configuration file. Nothing else sets application settings.
+`.env` is the only configuration file and my AIRLABS , GROQ, Google AI studio API keys live here.
 
-On Windows `python` isn't on PATH, so I call the venv directly
+python might not on PATH, so I call the venv directly
 (`.venv/Scripts/python.exe`) or pass it to make: `make PYTHON=.venv/Scripts/python.exe <target>`.
 
 ## Run on the host
@@ -27,8 +25,9 @@ scripts/run_local.ps1           # just start the API
 ```
 
 Then open http://127.0.0.1:8000.
+I have given a  short video demo on README.md.
 
-The script:
+Then the script:
 
 - Starts its own Postgres container, `fdr-app-pg`, on `127.0.0.1:55433`. It persists in the
   `fdr-app-pgdata` volume. `.env`'s `PG_DSN` points here.
@@ -97,8 +96,7 @@ run never leaves the app with a half-built index. Use `--reset` after a schema c
 
 - On the dashboard, an empty panel means "no data", not zero. For example, cost only shows
   when the provider reports usage and `LLM_PRICE_*` is set.
-- Retrieval quality (recall, MRR, nDCG) isn't on the dashboard. The app can't know it at
-  runtime; it's measured offline by the evals below.
+
 
 ## Tests and lint
 
@@ -112,8 +110,7 @@ run never leaves the app with a half-built index. Use `--reset` after a schema c
 There are two stages, run in order, against a 50-case golden set:
 
 1. **Retrieval** picks the chunk configuration. No LLM needed.
-2. **Generation** answers the golden questions using that retrieval setup, and a separate
-   judge model scores them.
+2. **Generation** answers the golden questions using that retrieval setup, and a separate (Gemini 3.5 Flash)judge model scores them.
 
 Neither stage calls AirLabs; flight data comes from fixtures.
 
@@ -178,20 +175,6 @@ between full runs.
 
 The results go to `evals/runs/generation/`.
 
-### Offline smoke run
-
-This checks the whole eval pipeline with stand-in models: a hash embedder, no reranker, an
-echo generator and a fake judge. The numbers aren't measurements; it only proves the wiring.
-
-```powershell
-$env:ALLOW_TEST_DOUBLES = "true"
-.venv/Scripts/python.exe evals/retrieval_eval.py --backend memory --embedder hash --reranker none --sizes 256,512 --limit 10
-.venv/Scripts/python.exe evals/generation_eval.py --backend memory --embedder hash --reranker none `
-  --generator echo --judge fake --limit 10 --allow-smoke-selection `
-  --retrieval-result evals/runs/retrieval/latest-smoke.json
-```
-
-It writes only `latest-smoke.json`, never `latest.json`.
 
 ## Troubleshooting
 
