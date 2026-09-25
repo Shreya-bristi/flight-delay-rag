@@ -1,241 +1,213 @@
-# Local Development Runbook
+# Local Development
 
-This runbook covers local development, indexing, monitoring, and evaluation for the flight-delay RAG application.
+How I run, index, monitor and evaluate the chatbot on my own machine. There are two ways
+to run it, and I test both:
 
-## Prerequisites
+- **On the host.** Fast, and uses the GPU. This is what I use day to day.
+- **In Docker Compose.** The same image the Kubernetes cluster runs. Slower (CPU only), but
+  it catches container problems before they reach AWS.
 
-- Python virtual environment at `.venv`
-- Docker Desktop running
-- `.env` configured
-- Optional NVIDIA GPU for faster host-side indexing
+For the cloud deployment, see [AWS_DEPLOYMENT.md](AWS_DEPLOYMENT.md).
 
-> **Note:** `make` targets call `python`. On Windows, either pass `PYTHON=.venv/Scripts/python.exe` or run the underlying command directly.
+## Setup
 
-## 1. Run locally on the host
+You need a Python venv at `.venv`, Docker Desktop and a filled-in `.env`. An NVIDIA GPU is
+optional, but indexing takes about 100 s on a 4 GB GTX 1650 Ti against about 23 min on CPU.
+
+`.env` is the only configuration file. Nothing else sets application settings.
+
+On Windows `python` isn't on PATH, so I call the venv directly
+(`.venv/Scripts/python.exe`) or pass it to make: `make PYTHON=.venv/Scripts/python.exe <target>`.
+
+## Run on the host
 
 ```powershell
-scripts/run_local.ps1 -Index    # rebuild the corpus index, then start the API
-scripts/run_local.ps1           # start the API without re-indexing
+scripts/run_local.ps1 -Index    # first run, or after a parser/schema change: rebuild the index
+scripts/run_local.ps1           # just start the API
 ```
 
-Open:
+Then open http://127.0.0.1:8000.
 
-- API/UI: `http://127.0.0.1:8000`
-- Health: `http://127.0.0.1:8000/health`
-- Readiness: `http://127.0.0.1:8000/ready`
-- Metrics: `http://127.0.0.1:8000/metrics`
+The script:
 
-The script uses `.env` as the local configuration source and starts the dedicated Postgres container `fdr-app-pg` on `127.0.0.1:55433`.
+- Starts its own Postgres container, `fdr-app-pg`, on `127.0.0.1:55433`. It persists in the
+  `fdr-app-pgdata` volume. `.env`'s `PG_DSN` points here.
+- Clears any OS environment variable that `.env` also defines, so an old `$env:` value in
+  the shell can't override the file.
+- Runs the API with uvicorn on port 8000.
 
-## 2. Run with Docker Compose
+## Run with Docker Compose
 
 ```bash
 docker compose build api
 docker compose up -d postgres api
-docker compose run --rm --no-deps api python scripts/index_corpus.py
+docker compose run --rm --no-deps -T api python scripts/index_corpus.py   # ~23 min on CPU
 docker compose up -d prometheus grafana
 ```
 
-If port 8000 is already in use:
-
-```bash
-API_PORT=8001 docker compose up -d api
-```
-
-| Service | Address | Purpose |
+| service | URL | notes |
 |---|---|---|
-| API | `http://localhost:8000` | UI and application endpoints |
-| Prometheus | `http://localhost:9090` | Metrics and alert evaluation |
-| Grafana | `http://localhost:3000` | Local monitoring dashboard |
+| API | http://localhost:8000 | UI, `/ask`, `/health`, `/ready`, `/metrics` |
+| Prometheus | http://localhost:9090 | `/targets` should show `flight-rights-api` UP |
+| Grafana | http://localhost:3000 | dashboard provisioned from `deploy/grafana/dashboards/` |
 
-> **Note:** The API downloads embedding and reranking model weights on first startup, so a cold start can take several minutes.
+Things to know:
 
-`/ready` returns `503` until the corpus index exists and matches the running configuration.
+- Port 8000 is usually taken by the host API. Use `API_PORT=8001 docker compose up -d api`.
+- On a cold start the API downloads about 2.5 GB of model weights (bge-large-en-v1.5 and
+  bge-reranker-base) into the `hfcache` volume. `/health` doesn't answer until that finishes,
+  roughly 5 minutes.
+- Everything binds to `127.0.0.1`. Grafana runs with anonymous admin access for convenience;
+  that setting is for local use only.
 
-## 3. Rebuild the corpus index
+The same steps are wrapped as `make up`, `make index-container` and `make down`.
 
-```powershell
-.venv/Scripts/python.exe scripts/index_corpus.py --reset
-```
-
-Dry run:
-
-```powershell
-.venv/Scripts/python.exe scripts/index_corpus.py --dry-run
-```
-
-The indexer builds in staging, validates the result, and activates it only after validation succeeds.
-
-## 4. Verify the application
+## Health and readiness
 
 ```bash
-curl http://127.0.0.1:8000/health
-curl http://127.0.0.1:8000/ready
+curl http://127.0.0.1:8000/health    # process is up
+curl http://127.0.0.1:8000/ready     # index exists and matches the running settings
 ```
 
-- `/health` confirms the process is alive.
-- `/ready` confirms the application has a compatible index and can serve requests.
+`/ready` returning 503 is the readiness gate doing its job, not a crash. It stays 503 until
+there's an index, and goes back to 503 if the index was built with a different parser,
+embedding model or chunk size. The fix is to re-index.
 
-## 5. Local monitoring
-
-Prometheus rules:
-
-```text
-deploy/prometheus/rules/rag.yml
-```
-
-After changing them:
+## Indexing
 
 ```powershell
-.venv/Scripts/python.exe scripts/make_prometheusrule.py
+.venv/Scripts/python.exe scripts/index_corpus.py --dry-run   # parse the corpus only, no DB or embeddings
+.venv/Scripts/python.exe scripts/index_corpus.py --reset     # full rebuild
 ```
 
-Generated Kubernetes rule:
+The indexer writes to a staging table, validates it, and only then swaps it in, so a failed
+run never leaves the app with a half-built index. Use `--reset` after a schema change.
 
-```text
-deploy/k8s/45-alert-rules.yaml
+## Monitoring
+
+- The API exposes Prometheus metrics at `/metrics`.
+- Alert rules are in `deploy/prometheus/rules/rag.yml`. Local Prometheus mounts that folder
+  directly, so restart it after editing: `docker compose restart prometheus`.
+- The cluster uses a generated copy of those rules. Regenerate it after every edit (a test
+  fails if they drift):
+
+  ```powershell
+  .venv/Scripts/python.exe scripts/make_prometheusrule.py   # writes deploy/k8s/45-alert-rules.yaml
+  ```
+
+- On the dashboard, an empty panel means "no data", not zero. For example, cost only shows
+  when the provider reports usage and `LLM_PRICE_*` is set.
+- Retrieval quality (recall, MRR, nDCG) isn't on the dashboard. The app can't know it at
+  runtime; it's measured offline by the evals below.
+
+## Tests and lint
+
+```powershell
+.venv/Scripts/python.exe -m pytest -q
+.venv/Scripts/python.exe -m ruff check src scripts tests evals
 ```
 
-Grafana dashboards:
+## Evaluation
 
-```text
-deploy/grafana/dashboards/
-```
+There are two stages, run in order, against a 50-case golden set:
 
-Retrieval-quality metrics such as recall, MRR, and nDCG are evaluated offline rather than exported by the application.
+1. **Retrieval** picks the chunk configuration. No LLM needed.
+2. **Generation** answers the golden questions using that retrieval setup, and a separate
+   judge model scores them.
 
-## 6. Evaluation
+Neither stage calls AirLabs; flight data comes from fixtures.
 
-Evaluation has two stages:
-
-1. Retrieval evaluation selects the retrieval/chunking configuration.
-2. Generation evaluation measures answer quality using that retrieval setup.
-
-### 6.1 Validate the golden set
+### Golden set
 
 ```powershell
 .venv/Scripts/python.exe evals/build_golden_set.py --check
 ```
 
-### 6.2 Retrieval evaluation
+The golden set is generated from the case specs in `evals/golden/`. Edit those, never the
+JSONL.
 
-Use a disposable PostgreSQL + pgvector database:
+### Stage 1: retrieval
+
+This stage always runs on a throwaway Postgres + pgvector container, never on a database
+holding real data:
 
 ```powershell
 docker run -d --name fdr-test-pg --tmpfs /var/lib/postgresql/data:rw `
-  -e POSTGRES_USER=fdr `
-  -e POSTGRES_PASSWORD=fdr `
-  -e POSTGRES_DB=fdr `
-  -p 127.0.0.1:55432:5432 `
-  pgvector/pgvector:0.8.1-pg16
+  -e POSTGRES_USER=fdr -e POSTGRES_PASSWORD=fdr -e POSTGRES_DB=fdr `
+  -p 127.0.0.1:55432:5432 pgvector/pgvector:0.8.1-pg16
 
 $env:EVAL_PG_DSN = "postgresql://fdr:fdr@127.0.0.1:55432/fdr"
-
 .venv/Scripts/python.exe evals/retrieval_eval.py --sizes 256,512,1024
 ```
 
-Cleanup:
+It takes about 15-20 minutes for three sizes on my GPU. The results go to
+`evals/runs/retrieval/`, and `latest.json` is written only for a complete run, so an
+interrupted sweep can't pass for a real result.
+
+Useful flags:
+
+- `--overlaps` sets the chunk overlaps to test.
+- `--limit N` runs a quick subset.
+- `--keep-schemas` leaves the indexes in the database for inspection.
+
+### Stage 2: generation
+
+The free pass needs no model and no judge. It checks routing and calibrates the confidence
+gate:
 
 ```powershell
-docker rm -f fdr-test-pg
-```
-
-Results:
-
-```text
-evals/runs/retrieval/
-```
-
-### 6.3 Generation evaluation
-
-Calibration:
-
-```powershell
-$env:EVAL_PG_DSN = "postgresql://fdr:fdr@127.0.0.1:55432/fdr"
 .venv/Scripts/python.exe evals/generation_eval.py --generator none
 ```
 
-Typical hosted-model sample:
+Runs against a real model use hosted APIs, so they cost money or free-tier quota. The script
+refuses to send anything without `--confirm-paid-calls`. Without the flag it prints the plan
+(cases, requests, pacing) and stops, and I read that plan first:
 
 ```powershell
-.venv/Scripts/python.exe evals/generation_eval.py `
-  --generator groq-gpt-oss-20b `
-  --gate off `
-  --sample 10 `
-  --confirm-paid-calls
+# 2-case wiring check
+.venv/Scripts/python.exe evals/generation_eval.py --generator groq-gpt-oss-20b --gate off --pilot --confirm-paid-calls
+
+# 10-case sample, stratified by category so the clarify/abstain cases are always included
+.venv/Scripts/python.exe evals/generation_eval.py --generator groq-gpt-oss-20b --gate off --sample 10 --confirm-paid-calls
 ```
 
-Results:
+Generator candidates are defined in `evals/generator_candidates.json`. The judge is set with
+`JUDGE_*` in `.env`, and API keys are read by name and never written to results. The full
+50-case run needs more tokens than Groq's free tier allows in a day, so I use the sample run
+between full runs.
 
-```text
-evals/runs/generation/
-```
+The results go to `evals/runs/generation/`.
 
-> **Important:** Remote generator or judge calls require `--confirm-paid-calls`. Review the printed plan before running them.
+### Offline smoke run
 
-## 7. Smoke evaluation
+This checks the whole eval pipeline with stand-in models: a hash embedder, no reranker, an
+echo generator and a fake judge. The numbers aren't measurements; it only proves the wiring.
 
 ```powershell
 $env:ALLOW_TEST_DOUBLES = "true"
-
-.venv/Scripts/python.exe evals/retrieval_eval.py `
-  --backend memory `
-  --embedder hash `
-  --reranker none `
-  --sizes 256,512 `
-  --limit 10
-
-.venv/Scripts/python.exe evals/generation_eval.py `
-  --backend memory `
-  --embedder hash `
-  --reranker none `
-  --generator echo `
-  --judge fake `
-  --limit 10 `
-  --allow-smoke-selection `
+.venv/Scripts/python.exe evals/retrieval_eval.py --backend memory --embedder hash --reranker none --sizes 256,512 --limit 10
+.venv/Scripts/python.exe evals/generation_eval.py --backend memory --embedder hash --reranker none `
+  --generator echo --judge fake --limit 10 --allow-smoke-selection `
   --retrieval-result evals/runs/retrieval/latest-smoke.json
 ```
 
-Smoke results are non-authoritative.
+It writes only `latest-smoke.json`, never `latest.json`.
 
-## 8. Common issues
+## Troubleshooting
 
-### `/ready` returns 503
+| symptom | cause / fix |
+|---|---|
+| `/ready` is 503 | No index, or one built with different settings. Run `scripts/run_local.ps1 -Index`, or `index_corpus.py --reset`. |
+| Compose says port 8000 is in use | The host API is running. Use `API_PORT=8001 docker compose up -d api`. |
+| First start takes minutes | Model weights are downloading. They're cached after that. |
+| An alert rule change isn't showing | `docker compose restart prometheus`. |
+| A setting seems ignored | An OS environment variable beats `.env`. Close the shell, or use `run_local.ps1`, which clears them. |
 
-Rebuild the index:
-
-```powershell
-.venv/Scripts/python.exe scripts/index_corpus.py
-```
-
-If it still fails, check index compatibility with the current parser, embedding model, and chunk settings.
-
-### Port 8000 is already in use
+## Stopping
 
 ```bash
-API_PORT=8001 docker compose up -d api
-```
-
-### First startup is slow
-
-The embedding and reranking model weights are downloaded on first use and cached afterwards.
-
-### Prometheus alerts are missing
-
-Regenerate the Kubernetes rule manifest:
-
-```powershell
-.venv/Scripts/python.exe scripts/make_prometheusrule.py
-```
-
-## 9. Stop local services
-
-```bash
-docker compose down
-```
-
-Remove the disposable evaluation database if needed:
-
-```bash
-docker rm -f fdr-test-pg
+docker compose down          # keep the data
+docker compose down -v       # also delete the database volume
+docker rm -f fdr-test-pg     # remove the eval database
+docker stop fdr-app-pg       # stop the host-mode database
 ```
