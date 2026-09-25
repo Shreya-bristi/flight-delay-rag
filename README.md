@@ -1,9 +1,32 @@
 # Flight Delay RAG
 
-A retrieval-augmented chatbot that tells airline passengers what they are entitled to after a
-delay, cancellation or missed flight. It combines **live flight status** (AirLabs API) with text
-retrieved from **government regulations** (US DOT / 14 CFR, EU261, UK261) and **airline policies**
-(American, Delta, United, Southwest), and every factual sentence in an answer cites its source.
+> Active project: the core system is built, evaluated and has been deployed on AWS. Feedback welcome.
+
+Your flight is delayed four hours. Are you owed $600, $520, a refund, a hotel, or nothing?
+The answer depends on details most passengers don't know; where the flight departed, which
+airline operates it, what caused the delay, and whether the airline's own contract promises
+more than the law does.
+
+Flight Delay RAG is a chatbot came in my mind when my flight was delayed for 6 hours but I had to make it to the first day of class. That's been already over a year, I didn't know RAG then, AWS was just a buzzword to me. Now that i have started exploring world of platform Engineering, was like yeah..why not? Long story short my projec combines live flight status(AirLabsAPI) with text retrieved from government regulations (US DOT / 14 CFR, EU261, UK261) and
+airline policies (American, Delta, United, Southwest). Every factual sentence in an answer
+cites its source. I focused primarily on US domestic and Europe bound operations of these 4 carries.
+
+### What I had to get right
+
+-**he route decides the law, so code decides the route, not the LLM.**U261 and UK261 bind a
+  US airline only when the flight *departs* the EU or UK. London → New York can owe up to £520;
+  New York → London owes no fixed compensation. Getting that wrong is the most expensive mistake
+  the bot can make, so jurisdiction is resolved deterministically from the departure airport,
+  and the governing law gets a guaranteed place in the model's context.
+-**overnmnet law and airline promises are kept apart.**egulations say what a passenger is *entitled*
+  to; contracts of carriage say what the airline *promised*. Retrieval
+  reserves slots for both, and every source is labelled LAW or AIRLINE in the prompt.
+-**Ask, never guess.**f a question leaves out the detail that decides which law applies
+  ("my flight was delayed 5 hours"), the bot asks one clarifying question, then answers on a
+  stated assumption.
+-**No uncited claims** A validator checks every sentence: a legal, money or deadline claim
+  without a valid citation is sent back for one retry, and withheld if it still fails. No answer
+  is better than a confident wrong one about money someone is owed.
 
 ## Demo
 
