@@ -2,10 +2,7 @@
 
 > Active project: the core system is built, evaluated and has been deployed on AWS. Feedback welcome.
 
-Your flight is delayed four hours. Are you owed $600, $520, a refund, a hotel, or nothing?
-The answer depends on details most passengers don't know; where the flight departed, which
-airline operates it, what caused the delay, and whether the airline's own contract promises
-more than the law does.
+Your flight is delayed four hours. Are you owed $600, $520, a refund, a hotel, or nothing?Most passengers don’t know, because the answer can depend on where the flight departed, which airline operated it, and whether the airline’s own contract promises more than the law requires.
 
 Flight Delay RAG is a chatbot came in my mind when my flight was delayed for 6 hours but I had to make it to the first day of class. That's been already over a year, I didn't know RAG then, AWS was just a buzzword to me. Now that i have started exploring world of platform Engineering, was like yeah..why not? Long story short my projec combines live flight status(AirLabsAPI) with text retrieved from government regulations (US DOT / 14 CFR, EU261, UK261) and
 airline policies (American, Delta, United, Southwest). Every factual sentence in an answer
