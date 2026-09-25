@@ -20,3 +20,4 @@ deploy/terraform/.terraform/
 *.tfplan
 deploy/terraform/terraform.tfvars
 crash.log
+

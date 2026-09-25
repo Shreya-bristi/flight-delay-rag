@@ -21,30 +21,25 @@ I create it for a session and delete it after.
 
 Design choices:
 
-- **Only one workload has an AWS identity.** The backup CronJob assumes `fdr-backup` (IRSA),
-  which can `PutObject` under `db-backups/` and nothing else. It can't list, read or delete.
-  The API, the index Job and Postgres run with no role and no ServiceAccount token.
-- **No mail password anywhere.** Alertmanager publishes to SNS via its own IRSA role, and
-  SNS sends the email.
-- **NLB with IP targets and client IP preserved**, so the API's per-client rate limit sees
-  passengers, not the load balancer. The health check hits `/ready`.
+- **Only one workload has an AWS identity.**  Only the backup CronJob has an AWS identity. It uses the fdr-backup IRSA role, which is limited to writing backups under db-backups/. It cannot list, read, or delete objects. The API, index Job, and Postgres do not have AWS roles and do not receive ServiceAccount tokens.
+- **No mail password anywhere.** Alertmanager publishes alerts to SNS using its own IRSA role, and SNS handles email delivery.
+- **NLB with IP targets and preserved client IPs**, traffic goes directly to pod IPs while preserving the original client address. So API rate limiting is based on the passenger's IP rather than the load balancer. NLB health checks use the /ready endpoint.
 - **NetworkPolicies** restrict Postgres to the pods that need it (API, index Job, backup).
-- **Immutable image tags.** The image I tested and the image running can't drift apart.
-- **Pinned Helm chart versions** in the Makefile.
-- **One config source.** `deploy/k8s/18-config.yaml` mirrors `.env`, and a preflight
-  script refuses to deploy if they disagree.
+- **Immutable image tags.** So that the image I tested and the image running can't drift apart.
+- **Pinned Helm chart versions** Helm chart versions are fixed in the Makefile to keep deployments reproducible.
+- **One config source.** `deploy/k8s/18-config.yaml`is in sync with `.env`, and a preflight script refuses to deploy if the values differ.
 
 ## Prerequisites
 
 AWS CLI, Docker, kubectl, eksctl, Helm, Terraform, make, openssl and a GNU shell (I use
-Git Bash on Windows). You also need a Groq key and an AirLabs key.
+Git Bash on Windows). You also need a Groq key(or any API key of your choice) and an AirLabs key.
 
-Region is `us-east-2` throughout.
+Region is `us-east-2` for me.
 
-On Windows `python` isn't on PATH, so pass the venv interpreter to make:
+On Windows python may may not be isn't on PATH, so pass the venv interpreter to make:
 `PYTHON=.venv/Scripts/python.exe`.
 
-## 1. Account checks
+## Account checks
 
 ```bash
 aws sts get-caller-identity
@@ -52,9 +47,9 @@ aws eks describe-cluster-versions --region us-east-2 --output table
 ```
 
 The cluster file pins Kubernetes 1.35. Make sure it's still in standard support: extended
-support bills the control plane at $0.60/hr instead of $0.10.
+support bills the control plane at $0.60/hr instead of $0.10. 
 
-## 2. Supporting resources (Terraform)
+## Terraform
 
 ```bash
 cd deploy/terraform
@@ -64,8 +59,8 @@ cd ../..
 ```
 
 This creates the S3 bucket (versioned, encrypted, backups expire after 14 days), the ECR
-repo, the two IAM policies, the SNS topic with an email subscription, and the budget
-(alerts at 60% forecast, 90% actual).
+repo, the two IAM policies(fdr-db-backup, fdr-alerts-publish), the SNS topic with an email subscription, and the budget
+(alerts that given by my rate of usage I wills spend above 60% of my budget in the month and when I spent already more than 90% ).
 
 Confirm the SNS subscription from the email AWS sends, otherwise no alert is ever
 delivered:
@@ -76,17 +71,15 @@ aws sns list-subscriptions-by-topic --region us-east-2 \
 # SubscriptionArn must be a real ARN, not PendingConfirmation
 ```
 
-State is local and git-ignored. The bucket has `prevent_destroy`, so `terraform destroy`
-fails rather than deleting it.
-
+terraform.tfstate is local and is in .gitignore. The bucket has `prevent_destroy`, so the storage bucket is intentionally protected from accidental deletion.
 ## 3. Image and placeholders
 
 ```bash
 make ecr-push      # builds, pushes, prints a timestamp tag
 ```
 
-The manifests ship with placeholders on purpose. I fill them in a **copy of the working
-folder** (with `.env` and the Terraform state in it), never in the repo:
+The manifests ship with placeholders on purpose. I fill them in a copy of the working
+folder(with `.env` and the Terraform state in it), never in the repo:
 
 ```bash
 TAG=<tag from ecr-push>
@@ -98,9 +91,9 @@ sed -i "s/ACCOUNT_ID/$ACCOUNT/g" deploy/k8s/*.yaml deploy/helm/*.yaml
 sed -i "s/REPLACE_WITH_S3_BUCKET/$BUCKET/" deploy/k8s/60-db-backup.yaml
 ```
 
-This has to happen before step 4, because `eksctl-cluster.yaml` contains the account ID too.
+This has to happen before cluster creation, because `eksctl-cluster.yaml` contains the account ID too.
 
-## 4. Cluster (~20 min)
+## Cluster (~20 min)
 
 ```bash
 make eks-up
@@ -127,7 +120,7 @@ eksctl create addon -f deploy/k8s/eksctl-cluster.yaml
 eksctl create iamserviceaccount -f deploy/k8s/eksctl-cluster.yaml --approve
 ```
 
-## 5. Load balancer controller
+## Load balancer controller
 
 Install it before the API Service exists. Without it, EKS makes a Classic Load Balancer.
 
@@ -135,7 +128,7 @@ Install it before the API Service exists. Without it, EKS makes a Classic Load B
 make eks-lb-controller
 ```
 
-## 6. Secrets
+## Secrets
 
 ```bash
 kubectl create namespace fdr --dry-run=client -o yaml | kubectl apply -f -
@@ -150,11 +143,9 @@ kubectl -n fdr create secret generic fdr-secrets \
 unset PGPASS
 ```
 
-Secrets never go in the image, Git or Terraform state. `conversation-secret` is required
-with two replicas: it signs conversation tokens, and without a shared one a conversation
-started on one pod gets a 403 from the other.
+Secrets never go in the image, Git or Terraform state. The API replicas share a `conversation-secret` used to sign and verify conversation tokens. Both replicas must use the same value; otherwise, a token created by one pod cannot be verified by the other and the request may return 403 Forbidden.
 
-## 7. Deploy
+## Deploy
 
 ```bash
 .venv/Scripts/python.exe scripts/k8s_preflight.py --require-env
@@ -189,7 +180,7 @@ API pods download about 2.5 GB of model weights on first start. A startup probe 
 10 minutes. Rollouts replace one pod at a time with no surge pod, a PDB keeps one replica up
 during drains, and the two replicas are spread across nodes.
 
-## 8. Monitoring
+## Monitoring
 
 ```bash
 make eks-monitoring GRAFANA_PASSWORD='<pick one>' PYTHON=.venv/Scripts/python.exe
@@ -213,7 +204,7 @@ fails if the two drift.
 Optional: `make eks-logs` ships container logs to CloudWatch, and `make eks-logs-retention`
 sets them to expire after a day. It's off by default because Container Insights is billed.
 
-## 9. Backups
+## Backups
 
 `pg_dump` runs nightly at 03:00 UTC to `s3://<bucket>/db-backups/`. To run one now and
 restore it:
@@ -230,32 +221,14 @@ kubectl -n fdr scale deployment api --replicas=2
 Postgres is a single instance on one EBS volume. The backup limits data loss to a day; it
 isn't high availability. For real traffic I'd move to RDS, which only changes `pg-dsn`.
 
-## 10. Acceptance checks
 
-Static checks can't prove these, so I ran them against the live cluster:
+## HTTPS ( TO do)
 
-| check | how | expected |
-|---|---|---|
-| Readiness gate | `kubectl -n fdr get pods -l app=api -o jsonpath='{..readinessGates}'` | `target-health.elbv2.k8s.aws/...` on every pod |
-| Load balancer | `aws elbv2 describe-load-balancers` / `describe-target-groups` | `network`, `internet-facing`, `ip` targets, health check `/ready` |
-| Client IP | `curl http://$HOST/health`, then the API log | your public IP, not a `10.x` address |
-| NetworkPolicy | `kubectl run` a pod labelled `app=np-test` running `pg_isready` | no response. With `app=db-backup`: accepting connections |
-| No AWS creds on the API | `kubectl -n fdr exec deploy/api -- sh -c 'env \| grep -c ^AWS_'` | `0` |
-| Backup role scope | `aws s3` commands in a pod using the `fdr-backup` service account | put under `db-backups/` works; list and put elsewhere are denied |
-| Alert delivery | `amtool alert add` inside Alertmanager | email from AWS Notifications, then a RESOLVED one |
-| Teardown | `make audit` after `make eks-down` | `VERDICT: CLEAR` |
+The Service listens on plain HTTP. To enable HTTPS with a domain I have to request an ACM certificate in `us-east-2` and validate it by DNS.I have to update the DNS so that it points to NLB.
 
-## 11. HTTPS
+(din't get enough time to do this a the complexity of the project became exponential in a short span. But will make this change)
 
-The Service listens on plain HTTP, which is fine for a demo. To enable HTTPS with a domain:
-
-1. Request an ACM certificate in `us-east-2` and validate it by DNS.
-2. In `deploy/k8s/19-api-service.yaml`, uncomment the two SSL annotations and the `https`
-   port, and put the certificate ARN in.
-3. Point the domain at the NLB.
-4. Once HTTPS works, remove the `http` port.
-
-## 12. Teardown
+## Teardown
 
 ```bash
 make eks-down
@@ -264,17 +237,16 @@ make audit
 
 `eks-down` does things in an order that matters:
 
-1. A final backup. It stops if the backup fails; `SKIP_BACKUP=1` overrides that.
-2. Delete the Services while the controller still runs, so the NLB is removed.
-3. Delete the StatefulSet and PVCs while the CSI driver still runs, so the EBS volume goes.
-4. Delete the cluster.
+a. A final backup. It stops if the backup fails; `SKIP_BACKUP=1` overrides that.
+b. Delete the Services while the controller still runs, so the NLB is removed.
+c. Delete the StatefulSet and PVCs while the CSI driver still runs, so the EBS volume goes.
+d. Delete the cluster.
 
-Get either of the first two wrong and you're left with an orphaned NLB or volume that keeps
+Getting either of the first two wrong and I'm left with an orphaned NLB or volume that keeps
 billing.
 
 `make audit` returns `CLEAR`, `FOUND` (lists what's still running) or `UNKNOWN` (a query
-failed, which is not a clean bill). Billing data lags, so I run it again the next morning.
-
+failed, which is not a clean bill). Billing data lags, so I check in AWS next morning.
 ## Cost
 
 | item | rate |
@@ -313,7 +285,6 @@ problems:
   demo budget mostly produces surprise bills.
 - Unrestricted API egress. Groq, AirLabs and Hugging Face are DNS names on shifting IP
   ranges, so this would need an egress proxy or an FQDN-aware policy.
-- Local Terraform state.
-- The self-hosted vLLM path (`deploy/k8s/30-vllm.yaml`, `make eks-deploy-vllm`) is
-  optional. It needs the GPU node group uncommented in `eksctl-cluster.yaml`, `LLM_*`
-  switched in `18-config.yaml`, and `--max-model-len` of at least 11216.
+- Local Terraform state. If I lose the file terraform loses track of everything. I should use a remote backend and store the state in an S3 bucket with versioning and encryption. (Again i plan to do it in future, this time it's timee constarined)
+- No self-hosted model. I tried Qwen locally through Ollama and it was too slow on my 4 GB
+  GPU, so I didn't go ahead with vLLM and use a hosted model (Groq) instead.
