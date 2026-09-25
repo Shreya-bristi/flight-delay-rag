@@ -13,15 +13,15 @@ cites its source. I focused primarily on US domestic and Europe bound operations
 
 ### What I had to get right
 
--**he route decides the law, so code decides the route, not the LLM.**U261 and UK261 bind a
+-**he route decides the law, so code decides the route, not the LLM.** U261 and UK261 bind a
   US airline only when the flight *departs* the EU or UK. London → New York can owe up to £520;
   New York → London owes no fixed compensation. Getting that wrong is the most expensive mistake
   the bot can make, so jurisdiction is resolved deterministically from the departure airport,
   and the governing law gets a guaranteed place in the model's context.
--**overnmnet law and airline promises are kept apart.**egulations say what a passenger is *entitled*
+-**overnmnet law and airline promises are kept apart.** regulations say what a passenger is *entitled*
   to; contracts of carriage say what the airline *promised*. Retrieval
   reserves slots for both, and every source is labelled LAW or AIRLINE in the prompt.
--**Ask, never guess.**f a question leaves out the detail that decides which law applies
+-**Ask, never guess.** If a question leaves out the detail that decides which law applies
   ("my flight was delayed 5 hours"), the bot asks one clarifying question, then answers on a
   stated assumption.
 -**No uncited claims** A validator checks every sentence: a legal, money or deadline claim
