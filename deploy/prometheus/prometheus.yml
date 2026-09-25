@@ -8,7 +8,7 @@ scrape_configs:
   - job_name: flight-rights-api
     static_configs: [{targets: ["api:8000"]}]
 
-  # Uncomment when vLLM is running. vLLM exposes KV-cache and TTFT metrics
-  # natively at /metrics -- this is what makes the KV-cache dashboard possible.
+  # have to uncomment when vLLM is running. vLLM exposes KV-cache and TTFT metrics
+  # natively at /metrics, this is what makes the KV-cache dashboard possible.
   # - job_name: vllm
   #   static_configs: [{targets: ["host.docker.internal:8001"]}]

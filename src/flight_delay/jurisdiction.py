@@ -1,52 +1,6 @@
 """
 Determine which passenger-rights regimes apply to a flight question.
 
-All four supported airlines are US carriers, but EU261 or UK261 may also apply
-when the flight departs from the EU or UK.
-
-For these carriers:
-
-    UK -> US   UK261 + US DOT
-    EU -> US   EU261 + US DOT
-    US -> UK   US DOT only
-    US -> EU   US DOT only
-    US -> US   US DOT only
-    UK -> EU   UK261 only
-    EU -> UK   EU261 only
-
-Regions are US, EU, UK and OTHER (genuinely outside all three). Airport codes
-are classified by data/airport_regions.json and nothing else. OTHER never
-stands in for the US: US DOT governs only when a known or assumed endpoint is a
-US airport, so DXB -> CDG carries no US rules.
-
-The module returns:
-
-    governing  Regimes the known or assumed route actually supports. They
-               receive guaranteed context.
-
-    scope      Regimes worth retrieving, even if they do not govern.
-
-For example, a US -> Paris flight may include EU261 in `scope` so Article 3 can
-explain why it does not apply, but EU261 is not added to `governing`. Likewise
-an UNKNOWN endpoint is not treated as the US, but may be one: Paris -> ? has
-EU261 governing and US DOT in `scope` only, so refund rules are not lost from
-retrieval before the passenger says where the flight was going.
-
-If a passenger asks about their own disrupted trip and the departure is not
-known ("my Paris flight was cancelled", "my Delta flight was delayed 5 hours",
-"my Manchester to Newark flight"), `needs_clarification` is set and the pipeline
-asks for what is missing: the flight number (looked up in AirLabs), the
-departure/arrival airports, which Manchester, or which country an unrecognised
-city is in. If the reply still leaves it open, `assume_route()` picks the route
-to answer on and the sentence the answer opens with ("Assuming you're flying
-from Manchester, UK.").
-
-`resolve_regimes()` is the matrix itself, as a pure function of the two
-regions. `detect_jurisdictions()` uses it, and so does the golden-set builder,
-so the eval set and the running system cannot disagree about the law.
-
-The legal applicability rules themselves remain in the source documents; this
-module only decides which jurisdictions should be retrieved or prioritized.
 """
 
 from __future__ import annotations
@@ -80,11 +34,6 @@ def _load_airport_regions(path: Path = AIRPORT_REGIONS_PATH) -> dict[str, str]:
 
 _AIRPORT_REGIONS = _load_airport_regions()
 
-# Codes recognised when a passenger TYPES them ("ATL to CDG"): these carriers'
-# main US and European airports. Not a region table (regions come from the
-# JSON above); a whitelist, because nearly every uppercase three-letter word is
-# some airport's code: CFR (Caen), TSA (Taipei), ATC, AND, NOT... Live AirLabs
-# codes are not limited to this list.
 TEXT_AIRPORT_CODES = frozenset(["CDG", "ORY", "NCE", "LYS", "MRS", "TLS", "BOD", "FRA", "MUC", "BER", "DUS", "HAM", "STR", "CGN", "NUE", "AMS", "BRU", "CRL", "LUX", "DUB", "SNN", "ORK", "MAD", "BCN", "AGP", "PMI", "VLC", "SVQ", "ALC", "IBZ", "LPA", "TFS", "TFN", "LIS", "OPO", "FAO", "FNC", "PDL", "FCO", "MXP", "LIN", "VCE", "NAP", "BLQ", "FLR", "PSA", "CTA", "PMO", "BRI", "ATH", "SKG", "HER", "RHO", "JMK", "JTR", "CFU", "VIE", "SZG", "INN", "ZRH", "GVA", "BSL", "CPH", "BLL", "ARN", "GOT", "NYO", "OSL", "BGO", "TRD", "SVG", "HEL", "KEF", "WAW", "KRK", "GDN", "WRO", "KTW", "PRG", "BUD", "OTP", "CLJ", "SOF", "VAR", "BOJ", "ZAG", "SPU", "DBV", "LJU", "BTS", "TLL", "RIX", "VNO", "KUN", "MLA", "LCA", "PFO", "LHR", "LGW", "LCY", "LTN", "STN", "SEN", "MAN", "BHX", "EDI", "GLA", "ABZ", "NCL", "LPL", "BRS", "CWL", "BFS", "BHD", "INV", "EMA", "LBA", "SOU", "EXT", "NQY", "ATL", "ORD", "MDW", "DFW", "DAL", "DEN", "LAX", "SFO", "SJC", "OAK", "SAN", "SEA", "PDX", "LAS", "PHX", "TUS", "SLC", "JFK", "LGA", "EWR", "BOS", "IAD", "DCA", "BWI", "PHL", "PIT", "CLT", "RDU", "BNA", "MIA", "FLL", "MCO", "TPA", "RSW", "JAX", "IAH", "HOU", "AUS", "SAT", "MSY", "MSP", "DTW", "CLE", "CMH", "CVG", "IND", "STL", "MCI", "MKE", "OMA", "ABQ", "HNL", "OGG", "ANC", "SMF", "BUR", "ONT", "SNA", "MHT", "BHM", "BDL", "PVD", "ALB", "BUF", "SYR", "SJU", "BQN", "STT", "STX", "GUM", "SPN"])
 
 # --------------------------------------------------------------------------
@@ -315,12 +264,6 @@ def region_of(code: str | None) -> str | None:
     Region of an airport code, from data/airport_regions.json: "US", "EU", "UK"
     or "OTHER" (a listed airport outside all three).
 
-    None when no code is supplied OR the table does not list the code. The table
-    names every airport it knows, OTHER ones included, so a missing code is
-    genuinely unknown: it is an unknown endpoint (US DOT retrievable, never
-    governing on its account, and never assumed to be US), not a known OTHER
-    airport where no regime applies. (User decision 2026-09-16; before, a
-    missing code was OTHER.)
     """
     if not code:
         return None

@@ -1,51 +1,6 @@
 """
 Retrieval: hybrid candidate generation, rank fusion, cross-encoder reranking.
 
-THE TWO-STAGE ARCHITECTURE, AND WHY IT IS NOT OPTIONAL
--------------------------------------------------------
-Stage 1 casts a wide net cheaply. Stage 2 sorts a small set accurately.
-
-A bi-encoder embeds the query and each document SEPARATELY. Documents are
-embedded once, at ingest, so query time is one forward pass plus an approximate
-nearest-neighbour lookup: O(log N). Cheap, but the query and document never
-"see" each other, so scoring is coarse.
-
-A cross-encoder concatenates [query, chunk] into a SINGLE forward pass with full
-cross-attention between them. Far more accurate. But it cannot be precomputed —
-it needs the query — so it costs one forward pass per candidate:
-
-    over 40,000 chunks : 40,000 passes per query  -> minutes. Impossible.
-    over 50 candidates :      50 passes per query -> ~40ms on GPU. Fine.
-
-So neither works alone. Bi-encoder alone puts near-misses in the top 5 and the
-LLM cites the wrong clause. Cross-encoder alone does not run. Together: the
-bi-encoder buys recall, the cross-encoder buys precision.
-
-WHY HYBRID (DENSE + SPARSE) RATHER THAN DENSE ONLY
----------------------------------------------------
-Legal text is full of tokens where EXACT match is the whole signal: "§ 250.5",
-"$1,075", "Rule 24", "four times the fare". Embeddings smear these — every
-dollar amount lands in roughly the same region of vector space, which is
-precisely wrong when the dollar amount IS the answer. BM25 nails them.
-
-Conversely BM25 fails on "can I bring my snowboard" -> "carriage of sporting
-equipment", where there is no lexical overlap at all. Each covers the other's
-blind spot.
-
-WHY RECIPROCAL RANK FUSION RATHER THAN A WEIGHTED SCORE BLEND
----------------------------------------------------------------
-Cosine similarity lives on [-1, 1]. BM25 / ts_rank_cd is unbounded and
-corpus-dependent. Blending them as `alpha*dense + (1-alpha)*sparse` requires
-normalising two incomparable distributions, and the normalisation constants
-drift as the corpus grows — so a tuned alpha silently decays.
-
-RRF ignores scores entirely and uses only RANK:
-
-    score(d) = sum over retrievers of  1 / (k + rank(d))
-
-It is scale-free, needs no tuning, and is robust to one retriever returning
-garbage scores. `k` (default 60) damps the influence of top ranks so that a
-document found by BOTH retrievers outranks one found first by only one.
 """
 
 from __future__ import annotations
@@ -110,15 +65,10 @@ class CrossEncoderReranker:
         # max_length applies to the QUERY + CHUNK pair; longer pairs are truncated
         # (bge-reranker-base/large: 512). Evaluations measure truncation with the
         # model's own tokenizer.
-        #
-        # activation_fn is set EXPLICITLY. Left unset, sentence-transformers applies
-        # Sigmoid to a single-label cross-encoder, squeezing scores into (0, 1). The
-        # confidence gate's thresholds and the rag_rerank_top_score buckets are on the
-        # raw-logit scale, set for bge-reranker-base.
+        
         self._load = lambda: CrossEncoder(model_name, max_length=max_length, device=device,
                                           activation_fn=torch.nn.Identity())
-        # Loaded on first use, so an index build that embeds documents first does
-        # not share a 4 GB card with it (see embeddings.SentenceTransformerEmbedder).
+       
         self._model = None
 
     @property
@@ -138,7 +88,7 @@ class CrossEncoderReranker:
 
 
 def _fuse_orders(orders: list[list[Chunk]], k: int) -> list[Chunk]:
-    """RRF over orderings of Chunk objects; sets each chunk's `score` to its fused score."""
+    """RRF over orderings of Chunk objects; sets each chunk's score to its fused score."""
     scores: dict[str, float] = {}
     first: dict[str, Chunk] = {}
     for order in orders:
@@ -183,46 +133,6 @@ def balance_by_source_class(
 ) -> list[Chunk]:
     """
     Guarantee that the final context contains BOTH regulation and airline text.
-
-    WHY THIS IS NEEDED
-    -------------------
-    Relevance alone is biased toward one family per question. "How much am I
-    owed for a 4-hour delay?" scores regulation text highly everywhere, because
-    that is where the numbers live; "will Delta put me in a hotel?" scores the
-    airline's own pages highly. Take the top 6 by score and you routinely get 6
-    of one kind and none of the other.
-
-    That is wrong in this domain specifically, because the two answer different
-    questions and a passenger needs both:
-
-        regulation  ->  what you are ENTITLED to, and can insist on
-        airline     ->  what the carrier has PROMISED, which is often MORE
-                        than the legal floor, and is what the agent at the desk
-                        will actually act on
-
-    An answer built only on 14 CFR understates what the passenger can get. An
-    answer built only on the airline's customer service plan presents a
-    revocable corporate promise as though it were law.
-
-    HOW
-    ---
-    Reserve a minimum number of slots per family, filled with that family's
-    best-ranked chunks. Everything else is allocated by pure relevance. Quotas
-    are best-effort: if the corpus has no airline chunk for this query, the
-    slots go back to the other family rather than returning fewer results.
-
-    `prefer` is one candidate list per lane; the best chunk of each that is not already
-    picked takes a seat after the regime guarantees and before relevance, marked
-    `guaranteed` so the context budget does not drop it as the weakest thing present.
-    `prefer_section_diverse` stops two seats going to one doc_id#section_id, and
-    `prefer_rounds` > 1 gives each list a further seat once every list has had one.
-
-    `require_jurisdictions` reserves a further slot for each named regime. This
-    is separate from the government quota because the two failures are
-    different: the government quota stops an answer having no law in it at all,
-    while this stops an answer about a Paris departure being built entirely from
-    US law simply because US text out-ranked EU261. Relevance ranking has no
-    concept of which regime governs a route, so it cannot be trusted with that.
     """
     if top_k <= 0 or not ranked:
         return []

@@ -1,16 +1,6 @@
 """
 PostgreSQL integration tests: the SQL the unit tests cannot reach.
 
-Skipped unless FDR_TEST_PG_DSN points at a DISPOSABLE pgvector database - never
-the compose database that holds real conversations. Every test works inside its
-own throwaway schema (PgVectorStore(schema=...)) and drops it afterwards.
-
-    docker run -d --name fdr-test-pg --tmpfs /var/lib/postgresql/data:rw `
-      -e POSTGRES_USER=fdr -e POSTGRES_PASSWORD=fdr -e POSTGRES_DB=fdr `
-      -p 127.0.0.1:55432:5432 pgvector/pgvector:0.8.1-pg16
-    $env:FDR_TEST_PG_DSN = "postgresql://fdr:fdr@127.0.0.1:55432/fdr"
-    .venv/Scripts/python.exe -m pytest -q tests/test_postgres.py
-    docker rm -f fdr-test-pg
 """
 
 from __future__ import annotations

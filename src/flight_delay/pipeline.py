@@ -1,31 +1,6 @@
 """
-Orchestration: route -> gather evidence -> generate -> validate -> maybe retry.
+Orchestration: route -> gather evidence -> generate -> validate -> maybe retry
 
-WHY A HAND-WRITTEN STATE MACHINE RATHER THAN LangGraph, FOR NOW
-----------------------------------------------------------------
-The full plan specifies LangGraph, and for a long-lived project that is right:
-you get checkpointing, streaming of intermediate state, and a visualisable
-graph. Under a two-day deadline it is the wrong trade. LangGraph adds a
-dependency whose API has changed repeatedly, and debugging a framework you are
-learning at the same time as the domain is exactly the failure mode we are
-trying to avoid.
-
-This module implements the same graph explicitly. It is ~150 lines, has no
-framework magic, and every edge is visible. `run()` is a direct translation of
-the graph in ARCHITECTURE.md:
-
-    classify -> {policy | status | hybrid} -> assemble -> generate -> validate
-                                                             ^          |
-                                                             +--retry---+
-
-Porting it to LangGraph later is mechanical: each function b
-WHY THE ROUTER IS RULES-BASED AND NOT AN LLM CALL
---------------------------------------------------
-An LLM classifier would add a full round-trip (~1s) and a failure mode to every
-single request, to decide between three branches that are cleanly separable by
-"does the question contain a flight number" and "does it ask about rules". The
-rules version is instant, deterministic, free, and testable. If the eval shows
-routing accuracy is the bottleneck, upgrade it then - but measure first.
 """
 
 from __future__ import annotations
@@ -89,9 +64,7 @@ from .tools import (
 )
 
 # The rejection note appended on a validation retry is capped, so the request
-# budget can reserve a known amount for it (see evidence_token_budget). The
-# reserve is subtracted whether or not a retry happens, so a note SHORTER than
-# the cap buys the evidence nothing: length up to the cap is free.
+# budget can reserve a known amount for it.
 RETRY_NOTE_MAX_CHARS = 1200
 # How much of one rejected sentence is quoted back. Enough to identify it in the
 # model's own text, short enough that several still fit the cap.
@@ -101,17 +74,6 @@ RETRY_QUOTE_MAX_CHARS = 200
 def build_retry_note(report: ValidationReport) -> str:
     """
     What the model is told after `validate_answer` rejected its answer.
-
-    It quotes the REJECTED SENTENCES back verbatim. "2 factual sentence(s) carry
-    no citation" is a count, not a target: nothing in the answer tells the model
-    which two of its sentences a deterministic validator read as claims, and it
-    cannot re-derive the rule from the number. Measured on the Session 26 subset,
-    every case that failed validation once failed its retry too, and four of the
-    eight sentences involved were one marker away from passing.
-
-    The note never says what to claim, only which sentence to cite or drop, so it
-    cannot smuggle a fact the sources do not carry. It stays within
-    RETRY_NOTE_MAX_CHARS, which run() reserves up front.
     """
     head = ("\n\nYOUR PREVIOUS ANSWER WAS REJECTED: "
             + "; ".join(report.failures)[:RETRY_NOTE_MAX_CHARS // 3] + ".")
@@ -127,7 +89,7 @@ def build_retry_note(report: ValidationReport) -> str:
         howto = ("\nFor EACH sentence above: either end it with the marker of a supplied source "
                  "that actually says it, or delete the sentence. Do not add a new claim.")
         room = RETRY_NOTE_MAX_CHARS - len(head) - len(tail) - len(header) - len(howto) - len(
-            "".join(parts)) - 24  # 24: the "(and N more)" line, if it is needed
+            "".join(parts)) - 24  
         quoted: list[str] = []
         for n, sentence in enumerate(report.uncited_factual_sentences, 1):
             short = sentence if len(sentence) <= RETRY_QUOTE_MAX_CHARS else (
@@ -143,10 +105,7 @@ def build_retry_note(report: ValidationReport) -> str:
                          + (f"\n(and {dropped} more)" if dropped else "") + howto)
     return head + "".join(parts) + tail
 
-# Shown INSTEAD of an answer that still failed validation after its retries. It
-# follows the system prompt's Rule 7 (say what cannot be determined, point to the
-# right resource) and states no right of its own. The rejected text is kept in
-# Answer.diagnostics for logs and evaluation, never shown.
+# Shown INSTEAD of an answer that still failed validation after its retries. 
 VALIDATION_FAILURE_MESSAGE = (
     "I couldn't put together an answer I can fully back with citations from the "
     "regulations and airline policies I have, so I won't guess.\n\n"
@@ -181,11 +140,7 @@ def gate_reason_label(reason: str | None) -> str:
 
 def _term_matcher(*terms: str) -> re.Pattern[str]:
     """
-    One case-insensitive regex from whole-word terms.
-
-    Each term spells out its own inflections (`refunds?`), because a bare stem
-    between `\\b`s never matches an inflected word: `\\bcompensat\\b` misses
-    "compensation". A space in a term matches any run of whitespace.
+    One case-insensitive regex from whole-word terms
     """
     body = "|".join(t.replace(" ", r"\s+") for t in terms)
     return re.compile(rf"\b(?:{body})\b", re.I)
@@ -274,10 +229,6 @@ def detect_airline(question: str, flight_no: str | None = None) -> str | None:
     Work out which SUPPORTED carrier the question is about, from its name or its
     flight number prefix. None for no carrier, or one this assistant does not cover.
 
-    This matters more than it sounds. Without it, a question about United can
-    retrieve Delta's policy and present it as United's — a confidently wrong
-    answer about a specific company's obligations to a specific passenger. The
-    flight number is the stronger signal and wins when both are present.
     """
     code = resolve_airline(question, flight_no)
     return code if code in SUPPORTED_AIRLINES else None
@@ -294,8 +245,6 @@ def route_filters(
     """
     Build the retrieval filters for one question. Returns (flt, route).
 
-    Shared by the pipeline and the eval harnesses, so an evaluation measures
-    retrieval under the same airline/route scoping that production uses.
     """
     # Scope to the airline asked about, when we can tell. This narrows the
     # airline half of the evidence without touching the regulation half —

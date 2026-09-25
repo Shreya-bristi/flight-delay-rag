@@ -1,36 +1,10 @@
 #!/usr/bin/env python3
 """
-Stage 2 of 2: generate answers at the selected chunk configuration, judge them,
+generate answers at the selected chunk configuration, judge them,
 and compare generator candidates on identical retrieval (the bake-off).
 
-USAGE (PowerShell; the database must be a DISPOSABLE pgvector instance, see RUNBOOK.md)
-    $env:EVAL_PG_DSN = "postgresql://fdr:fdr@127.0.0.1:55432/fdr"
-    # free: retrieval, routing and confidence-gate calibration only, no model and no judge
-    .venv/Scripts/python.exe evals/generation_eval.py --generator none
-    # the bake-off: candidates by name from evals/generator_candidates.json
-    .venv/Scripts/python.exe evals/generation_eval.py --generator groq-gpt-oss-20b --generator groq-qwen3.8-27b --gate off --pilot --confirm-paid-calls
-    # offline smoke (no database, no model, no judge)
-    .venv/Scripts/python.exe evals/generation_eval.py --backend memory --embedder hash --reranker none --generator echo --judge fake --retrieval-result evals/runs/retrieval/latest-smoke.json --allow-smoke-selection
 
-This is the ONLY generation-quality evaluator. It reads the chunk configuration
-chosen by evals/retrieval_eval.py (evals/runs/retrieval/latest.json) and refuses a
-missing, incomplete, smoke or stale selection. It builds ONE index at that
-configuration, on PostgreSQL (the production store; schema
-eval_generation_<size>_<overlap>, dropped afterwards) or in memory for a smoke run,
-and holds retrieval fixed: every candidate answers from the same retrieved chunks,
-the same built context and the same evidence budget.
-
-PASSES
-------
-0. Routing pass, no model: every golden case through the production pipeline with
-   a generator that stops once the context is built. It records each turn's
-   structured outcome, the confidence gate's decision and signals, and warms the
-   retrieval cache. Its gate data is the calibration report (below). With
-   `--generator none` the run stops here and costs nothing.
-1. One pass per generator candidate, same cases, same retrieval, same gate.
-2. The judge (one model, frozen for the whole run) scores every candidate.
-
-WHAT IS MEASURED (per candidate)
+WHAT IS MEASURED 
 --------------------------------
 Two Ragas LLM-judged metrics, and no others:
 
@@ -50,50 +24,7 @@ Two Ragas LLM-judged metrics, and no others:
       scores 0.0 and is listed, so a retrieval or generation failure can never
       improve the mean by disappearing. The judged-only mean is reported beside it.
 
-Deterministic metrics, from the structured Answer.outcome (never from prose):
-  outcome counts; abstention_accuracy (abstain cases declined), clarification_accuracy
-  (clarify cases asked, once), unsupported_airline_accuracy (never looked up, no
-  supported carrier's documents, carrier flagged), over_abstention_rate (answer cases
-  gated or declined by the model), validation_pass_rate and first_try_pass_rate,
-  llm_error_rate, citation_validity (the model's final output names only supplied
-  sources), citation_coverage, tokens, cost when prices are configured, latency.
-  Every metric carries its denominator and failing case ids.
 
-GATE CALIBRATION (generator independent, from pass 0)
-  Per case: the gate's decision and signals (top rerank score, score margin,
-  lexical grounding). Answer-required cases the gate refuses are false abstentions;
-  abstain cases it lets through are missed abstentions; clarify cases are neither.
-  A threshold grid reports both counts per setting. Nothing is changed: thresholds
-  live in config.py and are the user's decision.
-
-BAKE-OFF RECOMMENDATION (printed, never applied; full runs only - see SELECTION_RULE)
-  hard gates: generation errors <= 5%, judge errors <= 10% after retries, zero
-  fabricated/unknown citations, zero incorrect unsupported-airline/out-of-scope
-  answers, every clarification and abstention edge case passes
-  -> Faithfulness within 0.05 of the best eligible -> highest FactualCorrectness
-  -> lowest measured cost/case -> tokens/case -> latency. No eligible candidate =
-  no winner. The winner's explicit production settings (its tested completion cap
-  included) are printed with it.
-
-PILOT (--pilot = PILOT_CASE_IDS; --cases for other fixed ids)
-  Validates wiring on fixed representative cases and never selects. The routing
-  pass still covers every case, so the full run's generation and judge cost is
-  extrapolated from the pilot's MEASURED per-case usage.
-
-PAID CALLS
-  Any generator or judge endpoint that is not on this machine is a paid or
-  rate-limited API. The run prints its plan (endpoints, cases, calls) and refuses
-  to start without --confirm-paid-calls. Keys are read from the environment or .env
-  and are never printed or written to a result file.
-
-REFERENCES ARE DRAFTS
-  The golden expected answers have not been vetted by a domain expert, so
-  factual_correctness is a consistency signal, not validated accuracy. Every run
-  says so and records it.
-
-AIRLABS
-  No evaluation path calls AirLabs: every case runs through
-  golden.replay.run_conversation with its own FixtureTool.
 """
 
 from __future__ import annotations
@@ -118,10 +49,10 @@ for p in (ROOT / "src", ROOT / "scripts", ROOT / "evals"):
 
 # Stage 1 owns the golden-set loader, the digests and the index builders;
 # importing them keeps the two stages provably on the same inputs.
-from retrieval_eval import (  # noqa: E402  (sys.path set above)
+from retrieval_eval import ( 
     LATEST as RETRIEVAL_LATEST,
 )
-from retrieval_eval import (  # noqa: E402
+from retrieval_eval import (  
     atomic_write_text,
     build_index,
     build_pg_index,
@@ -147,38 +78,18 @@ JUDGE_ENV_BASE_URL = "JUDGE_BASE_URL"
 JUDGE_ENV_MODEL = "JUDGE_MODEL"
 JUDGE_ENV_API_KEY = "JUDGE_API_KEY"
 
-# The judge, frozen for every candidate (user's decision, Session 14): the model is
-# JUDGE_MODEL (expected below; a different one is recorded as an override and has
-# no price), and this request goes with every judge call.
+
+# JUDGE_MODEL 
+
 #
-# Session 19 (2026-09-17), user's decision: the judge moved from Groq
-# openai/gpt-oss-120b to Google AI Studio gemini-3.5-flash-lite, because Groq's free
-# tier cannot judge this golden set. Measured from the Session 17 run: a full 50-case
-# judge pass needs ~733,000 tokens against a 200,000 tokens-per-day cap (3.7 days),
-# and gpt-oss-120b's 8,000 tokens-per-MINUTE cap is smaller than a single judge
-# request reserving its own 8,192-token completion cap, which returned HTTP 413
-# request_too_large and is never retried. On AI Studio's free tier this model is
-# capped on REQUESTS per day (500) with no token-per-day cap at all, and TPM is
-# 250,000 counted on input only, so neither limit binds here.
-#
-# reasoning_effort is deliberately absent: it is a Groq/OpenAI field, and Gemini's
-# OpenAI-compatibility layer does not accept it. Thinking level is left at the
-# model's default. temperature 0 so the judge does not vary between candidates. The
-# cap goes out under the host's own field name (cap_parameter): max_completion_tokens
-# for Groq, max_tokens elsewhere.
 JUDGE_EXPECTED_MODEL = "gemini-3.5-flash-lite"
 JUDGE_REQUEST = {"temperature": 0.0, "max_completion_tokens": 8192}
 JUDGE_STRUCTURED_OUTPUT = ("instructor Mode.JSON via Ragas llm_factory(provider='openai'): "
                            "response_format {'type': 'json_object'}, the Pydantic schema written "
                            "into the prompt, instructor re-asks on invalid JSON")
-# No published price for this model is recorded in this repository, so judge cost is
-# reported as unavailable rather than as zero (the same rule generator_candidates.json
-# uses for a candidate with null prices). Applied only to JUDGE_EXPECTED_MODEL.
+
 JUDGE_PRICES = None
-# AI Studio free tier for gemini-3.5-flash-lite: RPM 15, TPM 250K (input), RPD 500.
-# The judge is scored one case at a time, but a case makes several calls back to back,
-# so the client paces itself to stay under RPM. 60/15 = 4.0 s; 4.2 s leaves a margin
-# for clock skew. RPD resets at midnight Pacific.
+
 JUDGE_MIN_CALL_INTERVAL_S = 4.2
 JUDGE_RPD_LIMIT = 500
 
@@ -191,14 +102,11 @@ EVIDENCE_SCOPE = (
     "faithfulness to AUTHORIZED evidence: the numbered source blocks exactly as sent to "
     "the model, the route/airline/flight notes and FLIGHT DATA block sent with them, and "
     "system_prompt.md Rules 1, 2, 4 and 5; never the reference answer")
-# Rules of system_prompt.md whose content is substantive guidance the model may
-# state (legal hierarchy, which law a route triggers, delay-cause categories,
-# entitlement types and thresholds). Rules 3, 6 and 7 are citation, format and
-# abstention instructions: nothing an answer could claim as a fact.
+
 PROMPT_GUIDANCE_RULES = (1, 2, 4, 5)
 
-# Outcomes (models.Outcome) and what they mean for the metrics.
-SHOWN_GENERATED = ("answered", "abstained")          # model text the passenger saw
+
+SHOWN_GENERATED = ("answered", "abstained")         
 DECLINED = ("abstained", "gated", "declined_unsupported")
 
 SELECTION_RULE = (
@@ -219,15 +127,7 @@ FAITHFULNESS_TOLERANCE = 0.05
 
 
 def load_retrieval_selection(path: Path, allow_smoke: bool = False) -> dict:
-    """
-    The handoff from stage 1. Refuses anything that is not a finished selection.
-
-    A half-written or stale file is the one failure that would silently
-    invalidate every number below it: the answers would be generated at a chunk
-    size nobody chose, against gold labels, sources or a prompt that no longer
-    match. A smoke selection (stand-in models or --limit) is refused unless the
-    caller opts in explicitly, and the result is then marked non-authoritative.
-    """
+  
     path = Path(path).resolve()
     shown = display_path(path)
     if not path.exists():
@@ -439,11 +339,7 @@ def generator_settings(settings, gen: dict):
     if gen["provider"] in ("none", "echo"):
         return settings.model_copy(update={"llm_provider": "echo", "llm_base_url": "echo",
                                            "allow_test_doubles": True})
-    # The frozen llm_context_window is the common INPUT-ASSEMBLY budget (it sizes the
-    # sources with context_answer_reserve_tokens held back), not a model window: every
-    # candidate sees the same sources. The completion cap (reasoning included) is the
-    # candidate's own, and its SERVED window must hold the largest assembled prompt
-    # plus that cap. Checked here statically; measured per call in run_cases.
+   
     cap = gen.get("max_completion_tokens")
     provider_cap = gen.get("provider_max_completion_tokens")
     if cap is not None and provider_cap is not None and cap > provider_cap:
@@ -656,19 +552,7 @@ def build_api_judge(base_url: str, model: str, api_key: str, request: dict, max_
     The real judge: any OpenAI-compatible endpoint, through Ragas' own adapter.
     Returns (llm, model, base_url, meter).
 
-    AsyncOpenAI, not OpenAI: the collections metrics are async and call
-    `agenerate`, which a Ragas LLM built on a synchronous client refuses with
-    "Cannot use agenerate() with a synchronous client" — one error per metric per
-    case, i.e. a whole run of nothing.
 
-    `request` is sent verbatim with every judge call (JUDGE_REQUEST): the completion
-    cap goes out under the host's own field name, well above the adapter's 1024
-    default, because a reasoning judge spends tokens thinking before it emits the
-    structured object and a truncated object is an IncompleteOutputException, not a
-    low score. Ragas' own top_p default is removed so the frozen request is the whole
-    request. Structured output is instructor Mode.JSON (JUDGE_STRUCTURED_OUTPUT).
-    max_retries: the OpenAI client backs off on 429s itself. `transport`: tests and
-    the offline request display only.
     """
     import httpx
     from openai import AsyncOpenAI
@@ -708,7 +592,7 @@ def judge_min_call_interval_s(base_url: str) -> float:
     """
     Seconds between judge request starts. A local server has no per-minute cap; a
     hosted one does, and a single judged case makes several calls back to back.
-    JUDGE_MIN_CALL_INTERVAL_S is sized for AI Studio's free tier (RPM 15).
+    JUDGE_MIN_CALL_INTERVAL_S is sized for AI Studio's free tier.
     """
     return 0.0 if is_local_endpoint(base_url) else JUDGE_MIN_CALL_INTERVAL_S
 
@@ -752,9 +636,7 @@ def preflight_judge(judge_llm, model: str, base_url: str) -> None:
     pass has been paid for. On Groq's free tier that pass is most of a day's token
     quota, and it cannot be replayed: the answers live in memory, not on disk.
 
-    This exercises the real path (instructor structured output through the Ragas
-    adapter), not just connectivity, because that is where an OpenAI-compatible
-    endpoint most often differs. The call is metered like any other.
+   
     """
     from pydantic import BaseModel
 
