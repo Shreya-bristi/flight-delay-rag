@@ -28,10 +28,6 @@ cites its source. I focused primarily on US domestic and Europe bound operations
 ## Demo
 
 
-https://github.com/user-attachments/assets/71e1a2a0-f547-4adb-bc48-45281533d2ba
-
-
-
 
 ## High-Level Architecture
 
