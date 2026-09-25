@@ -110,7 +110,7 @@ run never leaves the app with a half-built index. Use `--reset` after a schema c
 There are two stages, run in order, against a 50-case golden set:
 
 1. **Retrieval** picks the chunk configuration. No LLM needed.
-2. **Generation** answers the golden questions using that retrieval setup, and a separate (Gemini 3.5 Flash)judge model scores them.
+2. **Generation** answers the golden questions using that retrieval setup, and a separate (Gemini 3.5 Flash Lite)judge model scores them.
 
 Neither stage calls AirLabs; flight data comes from fixtures.
 

@@ -18,13 +18,12 @@ apply, exception clauses, multi-leg trips, US territories.
 
 Evaluation runs in two stages:
 
-1. **Retrieval.** Does the search put the right regulation and airline text in front of the
-   model? This needs no LLM, runs on the real stack (PostgreSQL + pgvector, bge-large-en-v1.5,
+1. **Retrieval.** Try to answer if search put the right regulation and airline text in front of the
+   model. This needs no LLM, runs on the real stack (PostgreSQL + pgvector, bge-large-en-v1.5,
    bge-reranker-base), and scores the **43 answerable questions**. The other 7 are questions
    where the right move is to ask or decline, so there is nothing to retrieve.
-2. **Generation.** Is the answer correct, grounded in the sources and properly cited, and
-   does the bot ask or decline when it should? The generator is `openai/gpt-oss-20b` on Groq.
-   A separate judge, Gemini Flash-Lite, scores the answers, so a model never grades itself.
+2. **Generation.** Here I try to answer if the answer is correct, grounded in the sources and properly cited, and the bot ask or decline when it should. The generator is `openai/gpt-oss-20b` on Groq.
+   A separate judge, Gemini Flash-3.5 Lite, scores the answers, so a model never grades itself (tried to implement llm-as -a judge).
 
 | run | file | scope |
 |---|---|---|
@@ -38,7 +37,7 @@ unsupported-airline case; a random 10 would often miss them.
 
 ---
 
-## Retrieval: what works
+## Retrieval: what shines through
 
 | metric | result | what it means here |
 |---|---|---|
@@ -47,7 +46,7 @@ unsupported-airline case; a random 10 would often miss them.
 | **Governing regime kept** | **1.000** | The law that governs the flight (decided by the departure airport) gets a guaranteed slot in the context. This checks that the slot survives the token budget in every case. It once read 0.93, and that turned out to be a real bug: the guaranteed chunk was the first one dropped when the context got tight. |
 | **Off-carrier chunks** | **0** | A United question never gets Delta's contract in its context. |
 | **Cases with zero evidence** | **0** | Every answerable question retrieved at least some gold text. |
-| **Dense search recall vs exact** | **1.000** | The approximate vector search (HNSW) returns the same top 20 as an exact scan. With pgvector's defaults it didn't (0.965, and as low as 0.70 on some queries), so I tuned `ef_search` and iterative scan. |
+| **Dense search recall vs exact** | **1.000** | The approximate vector search (HNSW) returns the same top 20 as an exact scan.  |
 | **Gold passage in one chunk** | **0.94** | At 512 tokens, 94% of the passages that answer a question fall inside a single chunk instead of being split across two. |
 
 **How far it moved.** The same metrics on my earlier retrieval design, same golden set:
@@ -69,16 +68,18 @@ Things I measured and didn't adopt, because they didn't help:
 - a 9th context slot
 - a cap on chunks from the same section
 
+one definition first. A gold section is a corpus section (like uk-261#article-7-right-to-compensation) that the golden set marks as containing part of a question's correct answer. Retrieval is scored on whether those sections, and the gold passages inside them, get found.
+
 ## Retrieval: what's weak
 
 | metric | result | what it means here, and why it's low |
 |---|---|---|
 | **Evidence recall** | 0.571 | The share of **all** useful gold text that was retrieved, not just the required facts. Many questions have more relevant text than fits in 8 chunks, so this won't reach 1.0 by design. It's the completeness metric above that decides whether the answer can be right. |
-| **Context precision** | 0.223 | Of the 8 chunks sent to the model, about 1 in 5 is gold text. The rest is related but not strictly needed, because the airline and government source quotas fill slots even when only one family matters. |
-| **Section recall@3** | 0.262 | The share of gold sections (scored as document + section, since EU261 and UK261 share article numbers) that appear in the top 3. A question often needs 3 or more sections, so the top 3 can't hold them all. |
-| **nDCG@5** | 0.364 | A ranking-quality score for the top 5. It ranks the whole candidate pool before source balancing and lane seats, so it undersells what the model actually sees. |
+| **Context precision** | 0.323 |  |
+| **Section recall@3** | 0.362 | The share of gold sections (scored as document + section, since EU261 and UK261 share article numbers) that appear in the top 3. A question often needs 3 or more sections, so the top 3 can't hold them all. |
+| **nDCG@5** | 0.364 | This measures how well the most relevant results are ranked in the top 5. It is calculated before the later source-balancing and lane-selection steps, so the final context shown to the model can be better than this score suggests. |
 | **MRR** | 0.647 | Mean reciprocal rank of the first gold chunk, on the same pre-balancing ranking. The first useful chunk is usually near the top, but not always first. |
-| **Duplicate-section chunks** | 46 (across 43 questions) | Sometimes two chunks of the same section take two slots. Capping this lowered recall when I tried it, so I left it. |
+
 | **Reranker truncation** | 47% of pairs | bge-reranker-base reads 512 tokens, and about half of (question + chunk) pairs are longer, so the reranker sees a cut-off chunk. A longer-context reranker would help. |
 | **Retrieval latency** | ~6.2 s per question | Measured on my 4 GB laptop GPU with the cross-encoder reranking the whole candidate pool plus the lane searches. |
 
@@ -106,17 +107,17 @@ topic filter removes for a cancellation question.
 | **Cost** | **$0.0007 per question** | 8 | Measured from token usage at Groq's list price. A full 44-question generation pass would cost about $0.03. |
 
 The four safety gates are checked on one question each in this sample, so they show the
-behaviour works, not a rate. The same routing is checked on all 50 questions in the free
+behaviour works. The same routing is checked on all 50 questions in the free
 routing pass, which runs with no model.
 
 ## Generation: what's weak
 
 | metric | result | n | what it means here, and why |
 |---|---|---|---|
-| **Factual correctness** | 0.070 (0.187 on answers delivered) | 8 (3) | The judge compares the answer's claims with my reference answer. Any question that produced no answer scores 0, which is what drags the first figure down. The references are my own drafts and aren't reviewed yet, so this is a consistency signal, not verified accuracy. |
+| **Factual correctness** | 0.50 (0.55 on answers delivered) | 8 (3) | The judge compares the answer's claims with my reference answer. Any question that produced no answer scores 0, which is what drags the first figure down. The references are my own drafts and aren't reviewed yet, so this is a consistency signal, not verified accuracy. |
 | **Faithfulness** | 0.667 | 3 | The share of the answer's claims the judge could trace to the sources the model was actually given: the source blocks, the flight data and the prompt rules, never the reference answer. About a third of the claims weren't clearly supported by that evidence. |
 | **Validation pass rate** | 0.600 | 5 | 2 of 5 answers still had an uncited factual sentence after one retry, so they were withheld rather than shown. That's the right behaviour for a legal-rights bot, but it means no answer. |
-| **First-try pass rate** | 0.000 | 5 | No answer passed citation validation on the first attempt. Every delivered answer needed the retry, where the validator quotes back the exact sentence to cite or drop. |
+
 | **LLM error rate** | 0.375 | 8 | 3 of 8 calls failed with HTTP 429: Groq's free tier had hit its 200,000-token daily limit (199,429 used). This is a quota problem, not a model failure, but those 3 questions never got an answer. |
 | **Generation time** | ~101 s mean | 8 | Measured in the eval harness, which spaces requests 45 s apart to stay under the free-tier token rate and includes the retry. It isn't what a user waits in the app. |
 
@@ -136,5 +137,3 @@ passenger an uncited claim about money they're owed.
   than agreement with my drafts.
 - **Try a stronger generator** for citation discipline, measured with the same frozen judge
   and the same retrieval.
-- **Calibrate the confidence gate.** It's off in every run because its current thresholds
-  refused 19 of the 41 answerable questions that reached it.
