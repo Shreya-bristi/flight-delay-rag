@@ -1,0 +1,47 @@
+# corpus indexing runs as a one-off batch job
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: index-corpus
+  namespace: fdr
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  # stop a stuck indexing run after 45 minutes
+  activeDeadlineSeconds: 2700
+  template:
+    metadata:
+      labels:
+        # required by networkpolicy.yaml for postgress access
+        app: index-corpus
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: OnFailure
+      nodeSelector:
+        workload: cpu
+      containers:
+        - name: index
+          # use the same immutable API image so indexing and serving stay compatible
+          image: ACCOUNT_ID.dkr.ecr.us-east-2.amazonaws.com/fdr-api:REPLACE_WITH_IMMUTABLE_TAG
+          command: ["python", "scripts/index_corpus.py"]
+          envFrom:
+            - configMapRef: {name: fdr-config}
+          env:
+            - name: PG_DSN
+              valueFrom:
+                secretKeyRef: {name: fdr-secrets, key: pg-dsn}
+            # settings requires an LLm key even though the indexer never calls the LLM
+            - name: LLM_API_KEY
+              value: unused-by-indexer
+          volumeMounts:
+            # Temporary Hugging Face model cache 
+            - name: model-cache
+              mountPath: /models
+          resources:
+            requests: {cpu: "1", memory: "2Gi"}
+            limits:   {cpu: "2", memory: "4Gi"}
+      volumes:
+        - name: model-cache
+          emptyDir:
+            sizeLimit: 6Gi

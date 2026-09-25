@@ -1,0 +1,57 @@
+{
+  "_about": "Generator candidates for evals/generation_eval.py --generator <name>. Keys are never stored here: api_key_env names the variable to read. Model ids, context windows, completion limits and prices were taken from https://console.groq.com/docs/models and reasoning_effort values from https://console.groq.com/docs/reasoning on 2026-09-16; prices are null where that page gave none (cost is then reported as unavailable, not zero). The llama candidates are not available to the current Groq key (GET /models, 2026-09-16). max_completion_tokens is the completion cap (sent as max_completion_tokens to Groq) and includes reasoning tokens; 900 for both pilot candidates (user, 2026-09-16), below the 1000 output-tokens-per-minute limit this account has for qwen/qwen3.8-27b. The frozen input-assembly budget (8192) with its 700-token answer reserve sizes the sources, so every candidate sees the same sources, and the answer length is set by system_prompt.md Rule 6 for all candidates. context_window is the SERVED window, checked per call as prompt_tokens + cap. min_call_interval_s spaces the start of consecutive requests (retries included); retry_max_wait_s is the longest Retry-After the client waits for (a longer one fails the call rather than retrying early). Generator keys come from api_key_env only (never JUDGE_API_KEY). The judge (JUDGE_MODEL) must not be one of the candidates a run compares. Session 19 (2026-09-17): groq-gpt-oss-20b gained min_call_interval_s 45. Measured from the Session 17 run's Groq request log: the free tier's TPM 8000 refills at ~133 tokens/s, and one call consumes ~5,700 (avg 5,450 prompt + 257 completion), so ~43 s must pass before the next call fits; with no pacing every single success was followed ~1 s later by a guaranteed 429 (19 successes, 33 wasted rejections). Rejected requests bill 0 tokens, so pacing removes the wasted calls and the RPM-30 spikes but does NOT save daily quota. groq-qwen3.8-27b is RETIRED as a candidate (user, Session 19) and kept here only as a record of its tested settings.",
+  "candidates": [
+    {
+      "name": "groq-llama-3.1-8b-instant",
+      "provider": "groq",
+      "base_url": "https://api.groq.com/openai/v1",
+      "model": "llama-3.1-8b-instant",
+      "context_window": 131072,
+      "api_key_env": "GROQ_API_KEY",
+      "extra_body": {},
+      "price_input_per_mtok": null,
+      "price_output_per_mtok": null
+    },
+    {
+      "name": "groq-llama-3.3-70b-versatile",
+      "provider": "groq",
+      "base_url": "https://api.groq.com/openai/v1",
+      "model": "llama-3.3-70b-versatile",
+      "context_window": 131072,
+      "api_key_env": "GROQ_API_KEY",
+      "extra_body": {},
+      "price_input_per_mtok": null,
+      "price_output_per_mtok": null
+    },
+    {
+      "name": "groq-gpt-oss-20b",
+      "provider": "groq",
+      "base_url": "https://api.groq.com/openai/v1",
+      "model": "openai/gpt-oss-20b",
+      "context_window": 131072,
+      "api_key_env": "GROQ_API_KEY",
+      "extra_body": {"reasoning_effort": "low"},
+      "max_completion_tokens": 900,
+      "provider_max_completion_tokens": 65536,
+      "min_call_interval_s": 45,
+      "retry_max_wait_s": 120,
+      "price_input_per_mtok": 0.075,
+      "price_output_per_mtok": 0.30
+    },
+    {
+      "name": "groq-qwen3.8-27b",
+      "provider": "groq",
+      "base_url": "https://api.groq.com/openai/v1",
+      "model": "qwen/qwen3.8-27b",
+      "context_window": 131042,
+      "api_key_env": "GROQ_API_KEY",
+      "extra_body": {"reasoning_effort": "none"},
+      "max_completion_tokens": 900,
+      "provider_max_completion_tokens": 16384,
+      "min_call_interval_s": 60,
+      "retry_max_wait_s": 120,
+      "price_input_per_mtok": 0.80,
+      "price_output_per_mtok": 4.00
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+# network policies for fdr namespace
+# enforcement depends on the VPC CNI network policy agent enabled in eksctl-cluster.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: fdr
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-public
+  namespace: fdr
+spec:
+  podSelector:
+    matchLabels: {app: api}
+  policyTypes: ["Ingress"]
+  ingress:
+    - ports:
+        - {protocol: TCP, port: 8000}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-clients-only
+  namespace: fdr
+spec:
+  podSelector:
+    matchLabels: {app: postgres}
+  policyTypes: ["Ingress", "Egress"]
+  # only application, indexing , and backup workloads may reach postgress
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - {key: app, operator: In, values: [api, index-corpus, db-backup]}
+      ports:
+        - {protocol: TCP, port: 5432}
+  egress: []   # postgress does not initiate outbound connections
+---
+# optional vllm profile
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vllm-from-api-and-monitoring
+  namespace: fdr
+spec:
+  podSelector:
+    matchLabels: {app: vllm}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app: api}
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: monitoring}
+      ports:
+        - {protocol: TCP, port: 8000}

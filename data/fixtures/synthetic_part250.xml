@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC TEST FIXTURE - NOT REAL REGULATION TEXT.
+
+  This file mimics the *structure* of eCFR XML (DIV5/DIV6/DIV8, HEAD, P) so the
+  parser and chunker can be tested without network access. The wording is
+  invented for testing and must never be used as a source of legal information
+  or shipped as corpus content. Real corpus data is fetched by
+  scripts/fetch_corpus.py from ecfr.gov.
+-->
+<ECFR>
+  <DIV5 N="250" TYPE="PART">
+    <HEAD>PART 250—OVERSALES (SYNTHETIC FIXTURE)</HEAD>
+
+    <DIV8 N="250.1" TYPE="SECTION">
+      <HEAD>§ 250.1 Definitions.</HEAD>
+      <P>Confirmed reserved space means space on a specific date and on a specific flight and class of service of a carrier which has been requested by a passenger and which the carrier or its agent has verified, by appropriate notation on the ticket or in any other manner provided by the carrier, as being reserved for the accommodation of the passenger.</P>
+      <P>Denied boarding means the involuntary refusal to transport a passenger holding confirmed reserved space who has presented himself or herself for carriage at the appropriate time and place.</P>
+      <P>Stopover means a deliberate interruption of a journey by the passenger, scheduled to exceed four hours, at a point between the place of departure and the final destination.</P>
+    </DIV8>
+
+    <DIV8 N="250.5" TYPE="SECTION">
+      <HEAD>§ 250.5 Amount of denied boarding compensation for passengers denied boarding involuntarily.</HEAD>
+      <P>(a) Subject to the exceptions provided in § 250.6, a carrier shall pay compensation to passengers denied boarding involuntarily from an oversold flight at the rate of 200 percent of the fare to the passenger's first stopover, or if none, final destination, with a maximum of 775 dollars, if the carrier arranges for comparable air transportation that is planned to arrive at the airport of the passenger's first stopover, or if none, final destination, more than one hour but less than two hours after the planned arrival time of the passenger's original flight.</P>
+      <P>(b) Subject to the exceptions provided in § 250.6, a carrier shall pay compensation at the rate of 400 percent of the fare, with a maximum of 1550 dollars, if the carrier does not offer alternate transportation that is planned to arrive at the airport of the passenger's first stopover, or if none, final destination, less than two hours after the planned arrival time of the passenger's original flight.</P>
+      <P>(c) Compensation shall be paid by the carrier at the airport on the day and place the denied boarding occurs, except that if the carrier arranges alternate transportation that departs before the payment can be made, the payment shall be sent to the passenger within twenty four hours.</P>
+    </DIV8>
+
+    <DIV8 N="250.6" TYPE="SECTION">
+      <HEAD>§ 250.6 Exceptions to eligibility for denied boarding compensation.</HEAD>
+      <P>(a) A passenger denied boarding involuntarily shall not be eligible for denied boarding compensation if the flight for which the passenger holds confirmed reserved space is unable to accommodate that passenger because of substitution of equipment of lesser capacity when required by operational or safety reasons.</P>
+      <P>(b) Compensation is not required where the passenger has not complied fully with the carrier's contract of carriage or tariff provisions regarding ticketing, reconfirmation, check in, and acceptability for transportation.</P>
+      <P>(c) Compensation is not required where the carrier offers accommodation in a section of the aircraft other than that specified in the ticket at no extra charge, provided that a passenger seated in a section for which a lower fare applies shall be entitled to an appropriate refund.</P>
+    </DIV8>
+
+    <DIV8 N="250.9" TYPE="SECTION">
+      <HEAD>§ 250.9 Written explanation of denied boarding compensation and boarding priorities.</HEAD>
+      <P>(a) Every carrier shall furnish passengers who are denied boarding involuntarily from flights a written statement explaining the terms, conditions, and limitations of denied boarding compensation, and describing the carriers' boarding priority rules and criteria.</P>
+      <P>(b) The statement shall read as follows. If you have been denied boarding involuntarily, you may be entitled to compensation. Ask the gate agent for the written statement describing your rights and how the carrier determined who was denied boarding.</P>
+    </DIV8>
+
+    <DIV8 N="250.10" TYPE="SECTION">
+      <HEAD>§ 250.10 Report of passengers denied confirmed space.</HEAD>
+      <P>(a) Each reporting carrier shall file with the Department a report on passengers denied confirmed space, covering the operations of the carrier for each quarter of the calendar year.</P>
+      <P>(b) The report shall include the total number of passengers who volunteered to relinquish their seats and the total number who were denied boarding involuntarily.</P>
+    </DIV8>
+  </DIV5>
+</ECFR>

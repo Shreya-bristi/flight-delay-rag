@@ -1,0 +1,5 @@
+{"data":[{"flight_date":"2026-08-30","flight_status":"active",
+"departure":{"airport":"Los Angeles International","iata":"LAX","scheduled":"2026-08-30T23:30:00+00:00","actual":"2026-08-31T03:07:00+00:00","delay":217},
+"arrival":{"airport":"Logan International","iata":"BOS","scheduled":"2026-08-31T07:54:00+00:00","delay":198},
+"airline":{"name":"United Airlines","iata":"UA"},"flight":{"number":"2402","iata":"UA2402"},
+"aircraft":null,"live":null}]}

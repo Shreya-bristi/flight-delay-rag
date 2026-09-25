@@ -1,0 +1,111 @@
+# RAG API deployment and disruption budget
+# runtime configuration comes from config.yaml
+# external API traffic is exposed through api-service.yaml
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api
+  namespace: fdr
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: api
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: fdr
+spec:
+  replicas: 2
+  # replace one pod at a time, avoid a 3rd surge pod on the two-node CPU group
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        workload: cpu
+      # keep replicas of seperate nodes, prefer spreading across zones
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels: {app: api}
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {app: api}
+      # match the non-rooter use defined in the docker image
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: api
+          # use an immutable image tag or digest for rollouts
+          image: ACCOUNT_ID.dkr.ecr.us-east-2.amazonaws.com/fdr-api:REPLACE_WITH_IMMUTABLE_TAG
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef: {name: fdr-config}
+          env:
+            - name: PG_DSN
+              valueFrom:
+                secretKeyRef: {name: fdr-secrets, key: pg-dsn}
+            - name: AIRLABS_KEY
+              valueFrom:
+                secretKeyRef: {name: fdr-secrets, key: airlabs-key}
+            # required for LLM generation
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef: {name: fdr-secrets, key: llm-api-key}
+            # shared across replicas , so conversation token remain valid after
+            #load balancing, restarts and rollouts
+            - name: CONVERSATION_SECRET
+              valueFrom:
+                secretKeyRef: {name: fdr-secrets, key: conversation-secret}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          # startup waits for model loading, redainess requires a compatible index
+          # liveness restarts a process that stops responding after startup
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: {path: /ready, port: http}
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            # temporary cache for embedder and reranker model weights
+            - name: model-cache
+              mountPath: /models
+          resources:
+            requests: {cpu: "500m", memory: "1536Mi"}
+            limits:   {cpu: "2000m", memory: "3Gi"}
+      volumes:
+        - name: model-cache
+          emptyDir:
+            sizeLimit: 6Gi

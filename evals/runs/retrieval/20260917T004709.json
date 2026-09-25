@@ -1,0 +1,452 @@
+{
+  "timestamp": "2026-09-17T00:49:01+00:00",
+  "complete": true,
+  "authoritative": false,
+  "stage": "retrieval",
+  "config": {
+    "backend": "postgres",
+    "lexical": "PostgreSQL full-text search: OR of plainto_tsquery('english') lexemes, ranked by ts_rank_cd normalisation 1 (not BM25)",
+    "postgres": "16.12 (Debian 16.12-1.pgdg12+1)",
+    "pgvector": "0.8.1",
+    "embedder": "st",
+    "embedding_model": "BAAI/bge-large-en-v1.5",
+    "embedding_revision": "d4aa6901d3a41ba39fb536a557fa166f842b0e09",
+    "embedding_dim": 1024,
+    "reranker": "ce",
+    "reranker_model": "BAAI/bge-reranker-base",
+    "reranker_score_activation": "identity (raw logits)",
+    "final_k": 6,
+    "candidates_k": 50,
+    "rrf_k": 60,
+    "use_dense": true,
+    "use_sparse": true,
+    "hnsw_ef_search": 100,
+    "balance_sources": true,
+    "min_government_sources": 2,
+    "min_airline_sources": 2,
+    "chunk_breadcrumb": true,
+    "chunk_token_counter": "BAAI/bge-large-en-v1.5",
+    "parser_version": "2026-09-16.2",
+    "context_token_budget": 6000,
+    "llm_context_window": 8192,
+    "llm_max_tokens": 700,
+    "max_validation_retries": 1,
+    "query_instruction": "Represent this sentence for searching relevant passages: ",
+    "confidence_gate": "off in Stage 1; its decision is recorded (thresholds uncalibrated)",
+    "sizes": [
+      256
+    ],
+    "overlaps": [
+      15
+    ]
+  },
+  "config_digest": "043abbcff8528339",
+  "n_cases": 3,
+  "canonical_case_ids": [
+    "dom-01",
+    "dom-04",
+    "dom-07"
+  ],
+  "excluded": [
+    {
+      "id": "amb-01",
+      "reason": "not answerable (clarify)"
+    },
+    {
+      "id": "amb-02",
+      "reason": "not answerable (clarify)"
+    },
+    {
+      "id": "amb-03",
+      "reason": "not answerable (clarify)"
+    },
+    {
+      "id": "amb-06",
+      "reason": "not answerable (clarify)"
+    },
+    {
+      "id": "trap-04",
+      "reason": "not answerable (abstain)"
+    },
+    {
+      "id": "trap-08",
+      "reason": "not answerable (abstain)"
+    },
+    {
+      "id": "unsup-02",
+      "reason": "not answerable (abstain)"
+    },
+    {
+      "id": "dom-13",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "dom-15",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "dom-17",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "dom-21",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "dom-24",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "dom-25",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "dom-29",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "dom-31",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "dom-34",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "dom-36",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "dom-37",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "dom-44",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "uk-us-01",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "uk-us-03",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "uk-us-06",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "uk-us-09",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "uk-us-14",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "eu-us-01",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "eu-us-05",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "eu-us-07",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "eu-us-12",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "eu-us-13",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "us-eur-01",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "us-eur-02",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "us-eur-04",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "us-eur-06",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "us-eur-09",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "intra-04",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "intra-07",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "law-02",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "law-03",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "law-07",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "live-01",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "live-02",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "live-03",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "live-04",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "live-05",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "live-06",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "other-01",
+      "reason": "beyond --limit"
+    },
+    {
+      "id": "unsup-01",
+      "reason": "beyond --limit"
+    }
+  ],
+  "golden_version": 2,
+  "golden_digest": "0082248130eb64a0",
+  "corpus_digest": "aefdeffc2d937923",
+  "prompt_digest": "6f7a72184c556550",
+  "configurations": [
+    {
+      "chunk_target_tokens": 256,
+      "chunk_overlap_pct": 15,
+      "index_s": 104.5,
+      "n_chunks": 986,
+      "tokens_median": 207,
+      "tokens_p90": 249,
+      "tokens_max": 256,
+      "chunks_over_target": 0,
+      "embed_truncated_pct": 0.0,
+      "tokens_dist": "207/249/256",
+      "reranker_pair_truncated_pct": 0.0,
+      "gold_passages_in_one_chunk": 0.6667,
+      "evidence_recall": 0.3899,
+      "evidence_hit_rate": 0.3667,
+      "section_recall@3": 0.3889,
+      "mrr": 1.0,
+      "ndcg@5": 0.5878,
+      "context_precision": 0.2613,
+      "context_tokens": 1719.0,
+      "retrieval_ms": 2092.8,
+      "kept_of_retrieved": 1.0,
+      "governing_kept_share": 1.0,
+      "governing_missing_cases": [],
+      "off_carrier_chunks": 0,
+      "duplicate_section_chunks": 4,
+      "gate_would_abstain": 1,
+      "reranker_scores": {
+        "activation": "identity (raw logits)",
+        "top1_p10_p50_p90": [
+          -0.819,
+          -0.079,
+          1.529
+        ],
+        "all_min_max": [
+          -8.177,
+          1.529
+        ]
+      },
+      "zero_evidence_cases": [],
+      "no_context_cases": [],
+      "dense_search": {
+        "k": 50,
+        "queries": 3,
+        "production": {
+          "recall_vs_exact_mean": 1.0,
+          "recall_vs_exact_min": 1.0,
+          "short_lists": 0,
+          "median_ms": 32.93
+        },
+        "forced_hnsw": {
+          "recall_vs_exact_mean": 1.0,
+          "recall_vs_exact_min": 1.0,
+          "short_lists": 0,
+          "median_ms": 30.16
+        },
+        "production_plans": {
+          "Seq Scan on chunks": 3
+        }
+      }
+    }
+  ],
+  "items": {
+    "256/15": [
+      {
+        "id": "dom-01",
+        "category": "entitlement",
+        "turn_outcome": "llm_error",
+        "context_built": true,
+        "evidence_recall": 0.04634458230933685,
+        "evidence_hit_rate": 0.0,
+        "context_precision": 0.09102902374670185,
+        "section_recall@3": 0.16666666666666666,
+        "mrr": 1.0,
+        "ndcg@5": 0.3391602052736161,
+        "context_tokens": 1776,
+        "retrieval_ms": 2226.1,
+        "n_ranked": 50,
+        "n_retrieved": 6,
+        "n_kept": 6,
+        "governing": [
+          "US"
+        ],
+        "governing_kept": true,
+        "off_carrier_chunks": 0,
+        "duplicate_section_chunks": 1,
+        "gate_would_abstain": true,
+        "gate_reasons": [
+          "only 4/13 question terms (31%) appear in retrieved text; below 34% threshold"
+        ],
+        "top_rerank_score": -0.8188143968582153,
+        "retrieved_sections": [
+          "aa-conditions-of-carriage#our-responsibilities-when-there-are-schedule-operations-chan",
+          "aa-conditions-of-carriage#time-limits-for-liability",
+          "aa-conditions-of-carriage#compensation-for-involuntary-denied-boarding",
+          "aa-conditions-of-carriage#refunds",
+          "us-cfr-250-oversales#250-9-written-explanation-of-denied-boarding-compensation-an",
+          "aa-customer-service-plan#delays-and-cancellations-caused-by-us",
+          "aa-customer-service-plan#assistance-when-your-flight-has-been-delayed-or-canceled",
+          "aa-customer-service-plan#essential-customer-needs-during-extraordinary-delays",
+          "aa-customer-service-plan#delays-beyond-our-control-like-weather",
+          "aa-customer-service-plan#customer-service-plan"
+        ],
+        "kept_sections": [
+          "us-cfr-250-oversales#250-9-written-explanation-of-denied-boarding-compensation-an",
+          "aa-conditions-of-carriage#refunds",
+          "aa-conditions-of-carriage#compensation-for-involuntary-denied-boarding",
+          "aa-conditions-of-carriage#time-limits-for-liability",
+          "aa-conditions-of-carriage#our-responsibilities-when-there-are-schedule-operations-chan"
+        ]
+      },
+      {
+        "id": "dom-04",
+        "category": "entitlement",
+        "turn_outcome": "llm_error",
+        "context_built": true,
+        "evidence_recall": 0.617117606398736,
+        "evidence_hit_rate": 0.6,
+        "context_precision": 0.30173564753004006,
+        "section_recall@3": 0.5,
+        "mrr": 1.0,
+        "ndcg@5": 0.787702056960637,
+        "context_tokens": 1879,
+        "retrieval_ms": 2213.9,
+        "n_ranked": 50,
+        "n_retrieved": 6,
+        "n_kept": 6,
+        "governing": [
+          "US"
+        ],
+        "governing_kept": true,
+        "off_carrier_chunks": 0,
+        "duplicate_section_chunks": 2,
+        "gate_would_abstain": false,
+        "gate_reasons": [],
+        "top_rerank_score": 1.529145359992981,
+        "retrieved_sections": [
+          "wn-customer-service-plan#14-identifying-the-services-we-offer-to-help-mitigate-inconv",
+          "wn-contract-of-carriage#1-introduction",
+          "us-dot-refunds-qa#am-i-entitled-to-a-refund-of-the-ticket-price",
+          "wn-contract-of-carriage#9-flight-changes-cancellations-delays-and-diversions",
+          "wn-contract-of-carriage#6-acceptance-of-passengers",
+          "wn-contract-of-carriage#8-international-travel",
+          "wn-customer-service-plan#9-meeting-customer-needs-during-lengthy-tarmac-delays",
+          "us-cfr-250-oversales#250-9-written-explanation-of-denied-boarding-compensation-an",
+          "wn-contract-of-carriage#7-baggage",
+          "us-cfr-260-refunds#260-6-refunding-fare-for-flights-cancelled-or-significantly-"
+        ],
+        "kept_sections": [
+          "us-cfr-250-oversales#250-9-written-explanation-of-denied-boarding-compensation-an",
+          "us-dot-refunds-qa#am-i-entitled-to-a-refund-of-the-ticket-price",
+          "wn-customer-service-plan#14-identifying-the-services-we-offer-to-help-mitigate-inconv",
+          "wn-contract-of-carriage#1-introduction"
+        ]
+      },
+      {
+        "id": "dom-07",
+        "category": "entitlement",
+        "turn_outcome": "llm_error",
+        "context_built": true,
+        "evidence_recall": 0.5063825063825064,
+        "evidence_hit_rate": 0.5,
+        "context_precision": 0.3910149750415973,
+        "section_recall@3": 0.5,
+        "mrr": 1.0,
+        "ndcg@5": 0.6366824387328317,
+        "context_tokens": 1502,
+        "retrieval_ms": 1838.4,
+        "n_ranked": 50,
+        "n_retrieved": 6,
+        "n_kept": 6,
+        "governing": [
+          "US"
+        ],
+        "governing_kept": true,
+        "off_carrier_chunks": 0,
+        "duplicate_section_chunks": 1,
+        "gate_would_abstain": false,
+        "gate_reasons": [],
+        "top_rerank_score": -0.079257071018219,
+        "retrieved_sections": [
+          "dl-delay-cancel-policy#requesting-reimbursement",
+          "dl-contract-domestic#rule-19-flight-delays-cancellations",
+          "dl-contract-international#rule-20-flight-delays-cancellations",
+          "dl-delay-cancel-policy#am-i-experiencing-a-delayed-or-canceled-flight",
+          "dl-delay-cancel-policy#requesting-accommodations",
+          "dl-contract-domestic#rule-20-denied-boarding-compensation",
+          "dl-contract-international#rule-21-denied-boarding-compensation",
+          "dl-delay-cancel-policy#managing-a-delay",
+          "dl-delay-cancel-policy#managing-a-canceled-or-significantly-delayed-flight",
+          "dl-delay-cancel-policy#requesting-a-refund"
+        ],
+        "kept_sections": [
+          "us-cfr-259-protections#259-8-notify-passengers-of-known-delays-cancellations-and-di",
+          "us-cfr-260-refunds#260-6-refunding-fare-for-flights-cancelled-or-significantly-",
+          "dl-contract-international#rule-20-flight-delays-cancellations",
+          "dl-contract-domestic#rule-19-flight-delays-cancellations",
+          "dl-delay-cancel-policy#requesting-reimbursement"
+        ]
+      }
+    ]
+  },
+  "selected": {
+    "chunk_target_tokens": 256,
+    "chunk_overlap_pct": 15
+  },
+  "selection_rule": "evidence_recall within 0.02 of best -> highest MRR -> lowest context_tokens -> smaller chunk."
+}

@@ -1,0 +1,62 @@
+# Local development stack only.All exposed ports are bound to localhost.
+#Grafana anonymous admin access not used in production. There i set a password.
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.1-pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-shreya}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-okay123}
+      POSTGRES_DB: ${POSTGRES_DB:-flight_delay}
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    image: fdr-api:local
+    # Override API_PORT if host port 8000 is already in use
+    ports: ["127.0.0.1:${API_PORT:-8000}:8000"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Containers connect to Postgres through the Compose service name
+      PG_DSN: postgresql://${POSTGRES_USER:-shreya}:${POSTGRES_PASSWORD:-okay123}@postgres:5432/${POSTGRES_DB:-flight_delay}
+      # an optional URL used only when running through Docker Compose, without changing normal LLM_BASE_URL
+      LLM_BASE_URL: ${COMPOSE_LLM_BASE_URL:-${LLM_BASE_URL:-}}
+      # Test/demo fixtures must remain disabled outside testing
+      USE_FLIGHT_FIXTURES: "false"
+    volumes:
+      - hfcache:/models      # bge embedder and  reranker weights around 2.5 GB
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  prometheus:
+   # monitoring images for local environments
+    image: prom/prometheus:v3.14.0
+    ports: ["127.0.0.1:9090:9090"]
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/rules:/etc/prometheus/rules:ro
+    depends_on: [api]
+
+  grafana:
+    image: grafana/grafana:13.2.2   
+    ports: ["127.0.0.1:3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [prometheus]
+
+volumes:
+  pgdata:
+  hfcache:

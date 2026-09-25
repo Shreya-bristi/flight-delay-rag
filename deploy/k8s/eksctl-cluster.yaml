@@ -1,0 +1,122 @@
+# eksctl cluster configuration for the flight-delay RAG deployment
+# long-lived AWS resources are managed seperately with terraform
+
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: fdr
+  region: us-east-2
+  # re-cehck EKS support before creating a new cluster
+  version: "1.35"
+  tags:
+    Project: flight-delay-rag
+    Ephemeral: "true"
+
+# EKS requires at least two Availability zones
+availabilityZones: ["us-east-2a", "us-east-2b"]
+
+iam:
+  # required for IAM roles for Service Accounts (IRSA)
+  withOIDC: true
+
+  serviceAccounts:
+    # database backups may write only to the configured S3 backup path
+    - metadata:
+        name: fdr-backup
+        namespace: fdr
+      attachPolicyARNs:
+        - "arn:aws:iam::ACCOUNT_ID:policy/fdr-db-backup"
+
+    # Alertmanager publishes alerts to the project SNS topic
+    - metadata:
+        name: fdr-alertmanager
+        namespace: monitoring
+      attachPolicyARNs:
+        - "arn:aws:iam::ACCOUNT_ID:policy/fdr-alerts-publish"
+
+    # IAM identity used by AWS load balancer controller
+    - metadata:
+        name: aws-load-balancer-controller
+        namespace: kube-system
+      wellKnownPolicies:
+        awsLoadBalancerController: true
+
+managedNodeGroups:
+  # ------------------------------------------------------------------ CPU
+  - name: cpu
+    instanceType: m7i-flex.large
+    # Fixed baseline capacity, scaling is manual
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 3
+    volumeSize: 30
+    volumeType: gp3               # gp3 is cheaper than gp2 at equal performance
+    privateNetworking: false
+    
+    labels:
+      workload: cpu
+    tags:
+      Project: flight-delay-rag
+
+  # ------------------------------------------------------------------ GPU
+  # Optional self-hosted vLLM node group.
+  # The default deployment uses a hosted generator and does not require a GPU.
+  #
+  # To enable:
+  #   1. Uncomment this block.
+  #   2. Ensure the G-instance quota is available.
+  #   3. Create the node group with:
+  #
+  #      eksctl create nodegroup \
+  #        -f deploy/k8s/eksctl-cluster.yaml \
+  #        --include=gpu
+  #
+  # - name: gpu
+  #   instanceType: g4dn.xlarge     # NVIDIA T4, 16 GB VRAM - same GPU as Colab
+  #   desiredCapacity: 1
+  #   minSize: 0                    # scale to 0 to stop paying without deleting
+  #   maxSize: 1
+  #   volumeSize: 100               # model weights are large
+  #   volumeType: gp3
+  #   
+  #   amiFamily: AmazonLinux2023
+  #   privateNetworking: false
+  #   labels:
+  #     workload: gpu
+  #     nvidia.com/gpu: "true"
+  #   
+  #   # Reserve the GPU node for workloads with a matching toleration
+  #   taints:
+  #     - key: nvidia.com/gpu
+  #       value: "true"
+  #       effect: NoSchedule
+  #   tags:
+  #     Project: flight-delay-rag
+
+# ============================================================================
+# EKS control-pane logs only
+# Application container logging is enabled seperatelt with 'make-eks-logs'
+# ============================================================================
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["api", "audit", "authenticator"]
+    logRetentionInDays: 1     
+
+addons:
+  - name: vpc-cni
+    version: latest
+    
+    # enable enforcement for kubernetes networkpolicy resources
+    configurationValues: |-
+      {"enableNetworkPolicy": "true"}
+  - name: coredns
+    version: latest
+  - name: kube-proxy
+    version: latest
+  # required for EBS-backed PersistentVolumeClaims such as Postgres storage
+  - name: aws-ebs-csi-driver
+    version: latest
+    wellKnownPolicies:
+      # Allow the CSI controller to create and attach EBS volume
+      ebsCSIController: true

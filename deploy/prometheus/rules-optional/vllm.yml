@@ -1,0 +1,20 @@
+#Alert rules for the self-hosted VLLM
+# Not loaded by deafult, enabled only when VLLM metrics are being scraped
+groups:
+  - name: vllm-self-hosted
+    rules:
+      - alert: KVCacheSaturated
+        expr: vllm:gpu_cache_usage_perc > 0.95 and vllm:num_requests_waiting > 10
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: "KV cache full and requests queueing"
+          action: "You are past the saturation knee. Reduce max-model-len, or scale replicas. See scripts/bench_kv_cache.py."
+
+      - alert: VLLMDown
+        expr: up{job="vllm"} == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "vLLM scrape target is down"
+          action: "Under the self-hosted profile the API has no generator without it: every /ask returns the neutral llm_error reply. Check the vllm pod (GPU node taint, device plugin, model download) before touching the API."

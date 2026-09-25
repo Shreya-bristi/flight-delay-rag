@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+.env
+*.egg-info/
+dist/
+build/
+.venv/
+.airlabs_quota.json
+data/raw/
+data/CORPUS.json
+*.tar.gz
+.pytest_cache/
+.ruff_cache/
+
+# Terraform local cache, state, plans, and private variables
+deploy/terraform/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+deploy/terraform/terraform.tfvars
+crash.log

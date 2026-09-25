@@ -1,0 +1,19 @@
+# Exclude VCS, local environments, secrets, caches, and build artifacts
+.git
+.venv
+.env
+.env.*
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+.airlabs_quota.json
+build
+dist
+*.egg-info
+*.tar.gz
+evals
+tests
+deploy
+data/raw
+

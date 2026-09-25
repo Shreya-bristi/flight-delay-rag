@@ -1,0 +1,40 @@
+{
+  "title": "Flight Delay RAG - self-hosted vLLM (optional)",
+  "uid": "frr-vllm",
+  "timezone": "browser",
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "description": "ONLY for the optional self-hosted profile (deploy/k8s/30-vllm.yaml, or the commented vllm job in deploy/prometheus/prometheus.yml). These series come from vLLM's own /metrics endpoint. The adopted production generator is HOSTED (Groq), which exposes none of them, so this dashboard is NOT provisioned by default - Grafana loads only deploy/grafana/dashboards/. Import it by hand (Dashboards -> Import -> upload this file) when vLLM is actually running and being scraped.",
+  "panels": [
+    {
+      "type": "text",
+      "title": "Before you read these numbers",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "These panels are **blank unless a vLLM server is being scraped**. Blank does not mean idle: a hosted provider has no KV cache to report. Enable the `vllm` scrape job in `deploy/prometheus/prometheus.yml` (local) or the `vllm` ServiceMonitor in `deploy/k8s/40-monitoring.yaml` (cluster) first."
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "KV cache utilisation vs waiting queue",
+      "description": "The saturation knee: once gpu_cache_usage_perc pins near 1.0, num_requests_waiting grows and latency follows. Measured locally by scripts/bench_kv_cache.py.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "vllm:gpu_cache_usage_perc", "legendFormat": "kv cache used", "refId": "A" },
+        { "expr": "vllm:num_requests_running", "legendFormat": "running", "refId": "B" },
+        { "expr": "vllm:num_requests_waiting", "legendFormat": "waiting", "refId": "C" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Time to first token (p95)",
+      "description": "Prefill latency. Rises with context length, which is why the evidence budget is capped rather than 'as much as fits'.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(vllm:time_to_first_token_seconds_bucket[1m])) by (le))", "legendFormat": "p95 TTFT", "refId": "A" }
+      ]
+    }
+  ]
+}

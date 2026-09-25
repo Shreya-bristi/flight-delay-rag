@@ -1,0 +1,84 @@
+# Application alert rules
+
+ 
+groups:
+  - name: rag-quality
+    rules:
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, sum(rate(rag_end_to_end_seconds_bucket[5m])) by (le)) > 5
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "p95 end-to-end latency above 5s"
+          action: "Check rag_stage_duration_seconds by stage. Usual culprit is generation, then rerank."
+
+      - alert: EmptyRetrievalRate
+        expr: sum(rate(rag_zero_result_total[10m])) / clamp_min(sum(rate(rag_requests_total[10m])), 0.0001) > 0.05
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "More than 5% of queries retrieve nothing"
+          action: "Index coverage gap. Check index_chunks_total and whether the corpus actually ingested."
+
+      - alert: CitationValidationFailures
+        expr: sum(rate(rag_requests_total{outcome="validation_failed"}[10m])) / clamp_min(sum(rate(rag_requests_total[10m])), 0.0001) > 0.10
+        for: 10m
+        labels: {severity: critical}
+        annotations:
+          summary: "Over 10% of answers fail citation validation"
+          action: "The model is fabricating or omitting citations. Check prompt version, then model size."
+
+      - alert: FabricatedCitations
+        expr: sum(rate(rag_validation_failures_total{kind="unknown_marker"}[15m])) > 0
+        for: 15m
+        labels: {severity: critical}
+        annotations:
+          summary: "Model cited sources that were never retrieved"
+          action: "Highest-severity failure in this domain. Inspect traces immediately."
+
+      # retreival quality is evaluated offline, not exported as runtime metric
+
+      - alert: OverAbstention
+        expr: sum(rate(rag_gate_abstentions_total[30m])) / clamp_min(sum(rate(rag_requests_total[30m])), 0.0001) > 0.35
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: "Confidence gate refusing more than 35% of queries"
+          action: "Gate may be too strict. It refuses when a signal falls BELOW its threshold, so loosening means LOWERING min_rerank_score, min_score_margin or min_grounding_ratio - only after re-checking the traps in evals/generation_eval.py. NOTE: with CONFIDENCE_GATE_ENABLED=false (the current deployment) rag_gate_abstentions_total is never incremented and this rule cannot fire. That is the gate being off, not the gate being well behaved."
+
+      # seperate runtime alerts for generation-provider failure
+      - alert: LLMCallErrorRate
+        expr: sum(rate(llm_calls_total{outcome=~"request_error|transient_error|malformed|empty"}[10m])) / clamp_min(sum(rate(llm_calls_total[10m])), 0.0001) > 0.20
+        for: 10m
+        labels: {severity: critical}
+        annotations:
+          summary: "Over 20% of generation calls fail"
+          action: "Read the turn log: it records the provider's complete sanitized message, code and Retry-After (never shown to the passenger). A 429 naming tokens per DAY is exhausted quota - wait for the reset or move providers; tokens per MINUTE is pacing and resolves itself. Check llm_retries_total by reason to tell them apart."
+
+      - alert: TruncatedAnswers
+        expr: sum(rate(llm_calls_total{outcome="truncated"}[15m])) / clamp_min(sum(rate(llm_calls_total[15m])), 0.0001) > 0.05
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "More than 5% of generations hit the completion cap"
+          action: "The model ran out of completion budget mid-answer; reasoning tokens count against it. Raise LLM_MAX_COMPLETION_TOKENS (retest: the adopted cap of 900 is the one the eval measured) or reduce answer length in system_prompt.md Rule 6. A truncated answer is discarded, so this shows up as latency and cost with nothing delivered."
+
+  - name: rag-resources
+    rules:
+      # warning before airlab quota exhausted
+      - alert: AirLabsQuotaLow
+        expr: airlabs_quota_remaining < 150
+        for: 1m
+        labels: {severity: warning}
+        annotations:
+          summary: "AirLabs quota within 50 calls of the reserve"
+          action: "At the reserve (AIRLABS_RESERVE, default 100) the quota guard refuses live calls. Fixtures are not served in production (USE_FLIGHT_FIXTURES=false), so flight lookups then return no data until the quota resets."
+
+      # VLLM cache alert lives in the VLLM rule set
+      - alert: IndexEmpty
+        expr: index_chunks_total == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "Vector index is empty"
+          action: "Run the index-corpus Job. /ready returns 503 in this state so no traffic is served."

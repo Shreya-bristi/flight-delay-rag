@@ -1,0 +1,38 @@
+# non-secret runtime configuration shared by the index Job and API Deployment
+# applied before the index Job so both workloads read the same settings
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fdr-config
+  namespace: fdr
+data:
+  # retreival configuration.these values are aligned with local .env
+  EMBEDDER: "st"
+  EMBEDDING_MODEL: "BAAI/bge-large-en-v1.5"
+  EMBEDDING_DIM: "1024"
+  RERANKER: "ce"
+  CHUNK_TARGET_TOKENS: "512"    # retreival selection (512 tokens, 15% overlap)
+  CHUNK_OVERLAP_PCT: "15"
+  CANDIDATES_K: "20"
+  FINAL_K: "8"
+  # ---------------------------------------------------------------- generator
+  # default hosted generator
+  # API key are provided through fdr-secrets
+  LLM_PROVIDER: "groq"
+  LLM_BASE_URL: "https://api.groq.com/openai/v1"
+  LLM_MODEL: "openai/gpt-oss-20b"
+  LLM_EXTRA_BODY: '{"reasoning_effort":"low"}'
+  # completion cap for reasoning-model usage
+  LLM_MAX_COMPLETION_TOKENS: "900"
+  # Input/context budget used by application
+  LLM_CONTEXT_WINDOW: "10312"
+  CONTEXT_ANSWER_RESERVE_TOKENS: "700"
+  LLM_RETRY_MAX_WAIT_S: "120"
+  LLM_PRICE_INPUT_PER_MTOK: "0.075"
+  LLM_PRICE_OUTPUT_PER_MTOK: "0.30"
+  # confidence gating disabled for adopted configuration
+  CONFIDENCE_GATE_ENABLED: "false"
+ 
+  # -------------------------------------------------------------------- tools
+  # production uses live flight data from airlabs not fixtures
+  USE_FLIGHT_FIXTURES: "false"

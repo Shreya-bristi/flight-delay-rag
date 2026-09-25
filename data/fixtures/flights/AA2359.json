@@ -1,0 +1,21 @@
+{
+  "response": {
+    "flight_iata": "AA2359",
+    "airline_iata": "AA",
+    "airline_icao": "AAL",
+    "flight_number": "2359",
+    "dep_iata": "DEN",
+    "dep_icao": "KDEN",
+    "dep_time": "2026-09-07 12:39",
+    "dep_estimated": "2026-09-07 14:33",
+    "dep_delayed": 114,
+    "arr_iata": "DFW",
+    "arr_icao": "KDFW",
+    "arr_time": "2026-09-07 15:46",
+    "arr_estimated": "2026-09-07 17:24",
+    "arr_delayed": 98,
+    "delayed": 98,
+    "status": "landed",
+    "duration": 127
+  }
+}

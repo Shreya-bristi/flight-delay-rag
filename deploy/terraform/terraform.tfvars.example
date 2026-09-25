@@ -1,0 +1,3 @@
+# Copy to terraform.tfvars and replace the example values
+bucket_suffix = "your-unique-suffix"   # -> bucket fdr-artifacts-your-unique-suffix
+alert_email   = "you@yourdomain"       # budget alarms; confirm the AWS email you get

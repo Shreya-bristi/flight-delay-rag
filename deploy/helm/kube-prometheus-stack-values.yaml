@@ -1,0 +1,87 @@
+# kube-prometheus stack values for EKS monitoring,
+# installed by 'make-eks-monitoring'
+
+prometheus:
+  prometheusSpec:
+    retention: 24h
+    # to discover project ServiceMonitors and PrometheusRules without requiring Helm labels
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests: {cpu: 200m, memory: 512Mi}
+      limits:   {memory: 1Gi}
+
+alertmanager:
+  # reusing the IRSA-enabled ServiceAccount created by eksctl
+  serviceAccount:
+    create: false
+    name: fdr-alertmanager
+  alertmanagerSpec:
+    resources:
+      requests: {cpu: 20m, memory: 64Mi}
+      limits:   {memory: 128Mi}
+  config:
+    route:
+      receiver: sns-email
+      group_by: ["alertname", "namespace"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        # suppress built in noise and infromational alerts
+        - receiver: "null"
+          matchers: ['alertname =~ "Watchdog|InfoInhibitor"']
+        - receiver: "null"
+          matchers: ['severity = "info"']
+    receivers:
+      - name: "null"
+      - name: sns-email
+        sns_configs:
+          - topic_arn: "arn:aws:sns:us-east-2:ACCOUNT_ID:fdr-alerts"
+            # IRSA supplies AWS credentials automatically here
+            sigv4:
+              region: us-east-2
+            subject: '[{{ .Status | toUpper }}] fdr: {{ .CommonLabels.alertname }}'
+            send_resolved: true
+    inhibit_rules:
+      - source_matchers: ['severity = "critical"']
+        target_matchers: ['severity = "warning"']
+        equal: ["alertname", "namespace"]
+
+grafana:
+  # adminPassword is supplied by the Makefile at install time
+  resources:
+    requests: {cpu: 50m, memory: 256Mi}
+    limits:   {memory: 768Mi}
+  sidecar:
+    dashboards:
+      # loading dashboard from configmaps labelled grfana dashboard =1
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+
+prometheusOperator:
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits:   {memory: 256Mi}
+
+kube-state-metrics:
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits:   {memory: 128Mi}
+
+prometheus-node-exporter:
+  resources:
+    requests: {cpu: 20m, memory: 32Mi}
+    limits:   {memory: 64Mi}
+
+# EKS manages the control plane itself, so the chart should not scrape them
+
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false

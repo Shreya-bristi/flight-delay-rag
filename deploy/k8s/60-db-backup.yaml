@@ -1,0 +1,64 @@
+# Daily postgress backup to the S3 artifact bucket.
+# backup erviceAccount uses IRSA with write-only access to db-backups/
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-backup
+  namespace: fdr
+spec:
+  schedule: "0 3 * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            # required by networkpolicy.yaml for Postgres access.
+            app: db-backup
+        spec:
+          serviceAccountName: fdr-backup
+          restartPolicy: Never
+          nodeSelector:
+            workload: cpu
+          initContainers:
+            - name: dump
+              image: pgvector/pgvector:0.8.1-pg16   # match the postgress image so pg_dump uses a compatible client version
+              command: ["/bin/sh", "-c"]
+              args:
+                - pg_dump --format=custom --no-owner --dbname="$PG_DSN" --file=/backup/fdr.dump
+                  && ls -l /backup/fdr.dump
+              env:
+                - name: PG_DSN
+                  valueFrom:
+                    secretKeyRef: {name: fdr-secrets, key: pg-dsn}
+              volumeMounts:
+                - {name: backup, mountPath: /backup}
+              resources:
+                requests: {cpu: "100m", memory: "128Mi"}
+                limits:   {cpu: "500m", memory: "512Mi"}
+          containers:
+            - name: upload
+              image: amazon/aws-cli:2.36.49
+              command: ["/bin/sh", "-c"]
+              args:
+                - aws s3 cp /backup/fdr.dump
+                  "s3://${S3_BUCKET}/db-backups/fdr-$(date -u +%Y%m%dT%H%M%SZ).dump"
+                  --region us-east-2
+              env:
+                - name: S3_BUCKET
+                  value: REPLACE_WITH_S3_BUCKET
+              volumeMounts:
+                - {name: backup, mountPath: /backup}
+              resources:
+                requests: {cpu: "100m", memory: "128Mi"}
+                limits:   {cpu: "500m", memory: "256Mi"}
+          volumes:
+            - name: backup
+              emptyDir:
+                sizeLimit: 2Gi

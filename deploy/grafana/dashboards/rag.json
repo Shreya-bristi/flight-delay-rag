@@ -1,0 +1,276 @@
+{
+  "title": "Flight Delay RAG",
+  "uid": "frr-main",
+  "timezone": "browser",
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "description": "Every panel here is backed by a metric src/flight_delay/metrics.py actually emits. An EMPTY panel means the series has never been reported (unavailable), not that the value is zero - the text panel at the bottom says which panels are expected to be empty in this deployment. Hosted-provider internals (KV cache, TTFT) are NOT shown: Groq exposes none, and a permanently blank panel reads as a broken system. The self-hosted vLLM profile has its own dashboard in deploy/grafana/dashboards-optional/.",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Chunks in the search index",
+      "description": "0 means /ready returns 503 and no traffic is served. Set at startup and after each index activation.",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "graphMode": "none", "textMode": "value", "colorMode": "value", "justifyMode": "center" },
+      "targets": [{ "expr": "max(index_chunks_total)", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Unavailable",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "AirLabs lookups left (this deployment)",
+      "description": "AirLabs lookups left this month AS COUNTED BY THIS DEPLOYMENT: AIRLABS_MONTHLY_QUOTA (default 1000) minus the live calls recorded in this deployment's own database. It cannot see calls made with the same key anywhere else (a local run, an earlier deployment whose database was deleted), so the real remaining quota on the AirLabs account can be LOWER - check the AirLabs dashboard for the account figure. Both API pods share one counter; the panel shows the lowest value either reports. At AIRLABS_RESERVE (default 100) the guard refuses live lookups; fixtures are NOT served in production (USE_FLIGHT_FIXTURES=false), so flight data simply becomes unavailable until the quota resets. Set the starting balance with `make airlabs-quota` (make eks-deploy asks for it); every live lookup is deducted from it.",
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "graphMode": "none", "textMode": "value", "colorMode": "value", "justifyMode": "center" },
+      "targets": [{ "expr": "min(airlabs_quota_remaining)", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Unavailable",
+          "unit": "suffix: / 1000",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 100 },
+              { "color": "green", "value": 150 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Questions per minute",
+      "description": "sum(rate(rag_requests_total)) over 1m. Counts every /ask turn, including clarifications and declines.",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "graphMode": "none", "textMode": "value", "colorMode": "value", "justifyMode": "center" },
+      "targets": [{ "expr": "sum(rate(rag_requests_total[1m]))*60", "refId": "A" }],
+      "fieldConfig": { "defaults": { "noValue": "No questions yet" } }
+    },
+    {
+      "type": "stat",
+      "title": "Answers failing citation checks",
+      "description": "Share of turns whose outcome was validation_failed: a citation did not resolve, or a factual sentence was uncited. Denominator is ALL turns. This is the hallucination alarm.",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "graphMode": "none", "textMode": "value", "colorMode": "value", "justifyMode": "center" },
+      "targets": [
+        {
+          "expr": "sum(rate(rag_requests_total{outcome=\"validation_failed\"}[5m])) / clamp_min(sum(rate(rag_requests_total[5m])),0.0001)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "No questions yet",
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.05 },
+              { "color": "red", "value": 0.15 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "LLM call errors",
+      "description": "Share of GENERATION CALLS that did not return a usable answer. Denominator is llm_calls_total, not requests: one turn can make several calls (validation retry). request_error covers a refusal the client did not retry - on the Groq free tier that is usually a tokens-per-day 429.",
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "graphMode": "none", "textMode": "value", "colorMode": "value", "justifyMode": "center" },
+      "targets": [
+        {
+          "expr": "sum(rate(llm_calls_total{outcome=~\"request_error|transient_error|malformed|empty\"}[5m])) / clamp_min(sum(rate(llm_calls_total[5m])),0.0001)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "No LLM calls yet",
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.05 },
+              { "color": "red", "value": 0.2 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Questions declined",
+      "description": "Share of turns the system declined to answer (gate refusal or a decline after generation). Denominator is ALL turns. Declining when the evidence is absent is CORRECT behaviour - this panel exists to show the level, not to be driven to zero. Compare with the gate-refusal panel below.",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "graphMode": "none", "textMode": "value", "colorMode": "value", "justifyMode": "center" },
+      "targets": [
+        {
+          "expr": "sum(rate(rag_abstentions_total[5m])) / clamp_min(sum(rate(rag_requests_total[5m])),0.0001)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "noValue": "No questions yet", "unit": "percentunit" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "End-to-end latency (p50 / p95)",
+      "description": "Question to validated answer. A validation retry doubles generation time, so this tracks the retry rate as much as model speed.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(rag_end_to_end_seconds_bucket[5m])) by (le))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(rag_end_to_end_seconds_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "B" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "p95 latency BY STAGE",
+      "description": "Stages: retrieve, rerank, generate, flight_lookup. This is the panel that answers 'what is slow', and it is why rag_stage_duration_seconds carries a stage label.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "s" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "flight_lookup" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#8AB8FF" } }] },
+          { "matcher": { "id": "byName", "options": "embed" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#FADE2A" } }] },
+          { "matcher": { "id": "byName", "options": "dense" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#73BF69" } }] },
+          { "matcher": { "id": "byName", "options": "sparse" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#1F60C4" } }] },
+          { "matcher": { "id": "byName", "options": "fuse" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#B0B0B0" } }] },
+          { "matcher": { "id": "byName", "options": "governing" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#8F3BB8" } }] },
+          { "matcher": { "id": "byName", "options": "lanes" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#37872D" } }] },
+          { "matcher": { "id": "byName", "options": "rerank" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#00B8B8" } }] },
+          { "matcher": { "id": "byName", "options": "generate" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#F2495C" } }] }
+        ]
+      },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(rag_stage_duration_seconds_bucket[5m])) by (le, stage))", "legendFormat": "{{stage}}", "refId": "A" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Turns by intent",
+      "description": "rights | status | hybrid | unsupported | out_of_scope, as classified by pipeline routing.",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 16 },
+      "targets": [{ "expr": "sum by (intent) (rate(rag_requests_total[5m]))", "legendFormat": "{{intent}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Turns by outcome",
+      "description": "answered | clarify | declined | validation_failed | llm_error. The safety story is here: a rising validation_failed or llm_error share is a regression even when latency is fine.",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 16 },
+      "targets": [{ "expr": "sum by (outcome) (rate(rag_requests_total[5m]))", "legendFormat": "{{outcome}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Validation failures by kind, and retries",
+      "description": "unknown_marker (a citation to a source that was never retrieved) is the most serious: the model invented evidence. uncited marks a factual sentence with no [Sn]. A failure triggers ONE regeneration, so the retry series is the cost of these failures: every retry is a second paid call and roughly doubles that turn's latency.",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 16 },
+      "targets": [
+        { "expr": "sum by (kind) (rate(rag_validation_failures_total[5m]))", "legendFormat": "{{kind}}", "refId": "A" },
+        { "expr": "sum(rate(rag_retries_total[5m]))", "legendFormat": "regenerations", "refId": "B" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM calls by outcome",
+      "description": "ok | truncated | empty | malformed | request_error | transient_error, labelled by provider. truncated means the answer hit LLM_MAX_COMPLETION_TOKENS (reasoning included) - raise the cap or shorten the answer, do not ignore it.",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 23 },
+      "targets": [{ "expr": "sum by (outcome) (rate(llm_calls_total[5m]))", "legendFormat": "{{outcome}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM retries by reason",
+      "description": "rate_limited | server_error | timeout | connection. Sustained rate_limited on a free tier means the provider quota, not the code, is the bottleneck; the complete provider message is in the turn log, never in the answer.",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 23 },
+      "targets": [{ "expr": "sum by (reason) (rate(llm_retries_total[5m]))", "legendFormat": "{{reason}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Provider tokens/min",
+      "description": "Tokens the provider REPORTED (prompt and completion). Empty when the provider returns no usage block - unavailable, not zero. Prompt tokens dominate: the system prompt alone is ~2.3k of every call.",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 23 },
+      "targets": [{ "expr": "sum by (kind) (rate(rag_tokens_total[5m]))*60", "legendFormat": "{{kind}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Estimated cost per LLM call (p95)",
+      "description": "UNAVAILABLE UNLESS PRICED. This series is emitted only when the provider reports usage AND LLM_PRICE_INPUT_PER_MTOK / LLM_PRICE_OUTPUT_PER_MTOK are set. An empty panel means cost is unknown - it does NOT mean the deployment is free. Self-hosted inference has no per-token invoice and will always be empty here; its cost is GPU-hours, which only AWS billing can see (scripts/aws_audit.ps1).",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 30 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 5 } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(rag_query_cost_usd_bucket[15m])) by (le))", "legendFormat": "p95 $/call", "refId": "A" },
+        { "expr": "sum(rate(rag_query_cost_usd_sum[15m]))*3600", "legendFormat": "$/hour", "refId": "B" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Context tokens sent to the LLM (p50 / p95)",
+      "description": "Estimated tokens of assembled evidence. The ceiling is evidence_token_budget = LLM_CONTEXT_WINDOW - system prompt - question/history - answer reserve. If this flattens against a ceiling, sources are being dropped: check the budget before blaming retrieval.",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 30 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(rag_context_tokens_bucket[5m])) by (le))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(rag_context_tokens_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "B" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Retrieval: empty-result share and candidate depth",
+      "description": "Empty-result share has the same denominator as the EmptyRetrievalRate alert (all turns). Candidates p50 is the fused pool before rerank; if it collapses, the lexical or dense leg is broken, not the corpus.",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 30 },
+      "targets": [
+        { "expr": "sum(rate(rag_zero_result_total[5m])) / clamp_min(sum(rate(rag_requests_total[5m])),0.0001)", "legendFormat": "empty-result share", "refId": "A" },
+        { "expr": "histogram_quantile(0.50, sum(rate(rag_candidates_bucket[5m])) by (le))", "legendFormat": "candidates p50", "refId": "B" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Reranker top score (p50 / p95)",
+      "description": "Cross-encoder score of the best chunk: the confidence proxy the gate thresholds read. Measured on the golden set, a trap scored 2.37, so a high score is not proof of relevance.",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 37 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(rag_rerank_top_score_bucket[5m])) by (le))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(rag_rerank_top_score_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "B" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Confidence score, and gate refusals by reason",
+      "description": "The REFUSAL series is expected to be empty: CONFIDENCE_GATE_ENABLED=false, because the gate is uncalibrated (it refused 19 of 41 answerable golden cases and let the trap through). Empty there means the gate is off, not that retrieval is always confident. The SCORE is recorded on every policy/hybrid turn even with the gate off - deliberately, because calibrating a threshold needs the signals of the turns that passed, not only the refused ones.",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 37 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(rag_confidence_bucket[5m])) by (le))", "legendFormat": "confidence p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.05, sum(rate(rag_confidence_bucket[5m])) by (le))", "legendFormat": "confidence p05", "refId": "B" },
+        { "expr": "sum by (reason) (rate(rag_gate_abstentions_total[5m]))", "legendFormat": "refused: {{reason}}", "refId": "C" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Flight lookups by source",
+      "description": "live | cache | fixture | blocked | miss. fixture must never appear in production (USE_FLIGHT_FIXTURES=false); blocked means the quota reserve refused the call.",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 37 },
+      "targets": [{ "expr": "sum by (source) (rate(airlabs_calls_total[5m]))", "legendFormat": "{{source}}", "refId": "A" }]
+    },
+    {
+      "type": "text",
+      "title": "How to read an empty panel",
+      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 44 },
+      "options": {
+        "mode": "markdown",
+        "content": "An absent series is **unavailable**, not zero.\n\n- **Cost** is emitted only when the provider reports usage *and* `LLM_PRICE_*` are configured. Empty = cost unknown.\n- **Gate refusals** are empty by design here (`CONFIDENCE_GATE_ENABLED=false`).\n- **Tokens** are empty if the provider returns no usage block.\n- **Retrieval quality** (evidence_recall, section_recall@3, MRR) is **not** on this dashboard and never will be: the application does not compute it. It is measured offline by `evals/retrieval_eval.py` against the golden set. An alert on a metric nothing emits never fires.\n- **KV cache / time-to-first-token** are internals of a self-hosted server. The adopted generator is hosted (Groq), which exposes none of them; showing them would be fabrication. If you run the optional vLLM profile, import `deploy/grafana/dashboards-optional/vllm.json`."
+      }
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+# planned to use VLLM bt my VRAM was to slow, insufficient for the qwen model generation
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-cache
+  namespace: fdr
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: fdr-gp3   
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm
+  namespace: fdr
+  labels:
+    app: vllm
+spec:
+  selector:
+    app: vllm
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: fdr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      automountServiceAccountToken: false   
+        workload: gpu
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:REPLACE_WITH_TESTED_VERSION
+          args:
+            - "--model"
+            - "Qwen/Qwen3-0.6B"
+            - "--dtype"
+            - "half"
+            - "--gpu-memory-utilization"
+            - "0.20"
+            - "--max-model-len"
+            - "11216"
+            - "--port"
+            - "8000"
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: HF_HOME
+              value: /models
+          volumeMounts:
+            - name: model-cache
+              mountPath: /models
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+              memory: "12Gi"
+            requests:
+              cpu: "2"
+              memory: "8Gi"
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            initialDelaySeconds: 120
+            periodSeconds: 15
+            failureThreshold: 40
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: model-cache
