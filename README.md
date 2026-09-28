@@ -230,20 +230,7 @@ The API exports Prometheus metrics (`src/flight_delay/metrics.py`). Alert rules 
   </video>
 </p>
 
-Kubernetes workloads (namespace fdr)
 
-   Index Job ──writes──► PostgreSQL + pgvector ◄──reads── API pods × 2 ──► Groq (LLM)
-                         (StatefulSet, gp3 EBS)               │        └──► AirLabs (flights)
-                                   │                          │
-                                   ▼                          ▲
-                         db-backup CronJob (03:00)         AWS NLB ◄── Public URL
-                         pg_dump ──► S3 db-backups/
-
-Monitoring
-
-   Prometheus ──scrapes──► API /metrics
-       ├──► Grafana dashboards
-       └──► Alertmanager ──► SNS fdr-alerts ──► email
 ```
 
 Full step-by-step procedure: [AWS_deployment.md](AWS_deployment.md).
