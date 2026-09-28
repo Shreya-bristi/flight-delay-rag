@@ -225,27 +225,10 @@ The API exports Prometheus metrics (`src/flight_delay/metrics.py`). Alert rules 
 
 ## Deployment on AWS
 
-```text
-Developer laptop (Git Bash)
-   │
-   ├── terraform apply ──► S3 bucket        (eval artifacts, db-backups/)
-   │                       ECR repository   fdr-api
-   │                       IAM policies     fdr-db-backup, fdr-alerts-publish
-   │                       SNS topic        fdr-alerts ──► email
-   │                       Budget alarm     fdr-monthly
-   │
-   ├── docker build + push ──► Amazon ECR (immutable image tag)
-   │
-   ├── eksctl ──► EKS cluster "fdr" (Kubernetes 1.35)
-   │                ├── 2 × m7i-flex.large worker nodes
-   │                ├── add-ons: vpc-cni, coredns, kube-proxy, EBS CSI
-   │                └── IRSA: fdr-backup, fdr-alertmanager, aws-load-balancer-controller
-   │
-   ├── helm ──► AWS Load Balancer Controller
-   ├── helm ──► kube-prometheus-stack (Prometheus, Grafana, Alertmanager)
-   │
-   └── kubectl apply deploy/k8s/  (namespace, gp3 StorageClass, NetworkPolicies,
-                                   fdr-config ConfigMap, fdr-secrets Secret)
+<p align="center">
+  <video src="docs/aws-deployment-demo-fast-hq.mp4" controls width="100%">
+  </video>
+</p>
 
 Kubernetes workloads (namespace fdr)
 
