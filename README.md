@@ -232,7 +232,7 @@ https://github.com/user-attachments/assets/21752488-15c2-477c-a57d-8aa5eb7cf89e
 ### Deployment Path
 
 <p align="center">
-  <img src="docs/aws-deployment-map.png"
+  <img src="docs/deployment_map.png"
        width="100%"
        alt="AWS EKS deployment and connection map">
 </p>
