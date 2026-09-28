@@ -14,8 +14,6 @@ cites its source. I focused primarily on US domestic and Europe bound operations
 
 ### What I had to get right
 
-### What I had to get right
-
 - **The route decides the law, so code decides the route, not even the LLM.** EU261 and UK261 apply to a US airline passenger only when the flight *departs* the EU or UK. London → New York can owe up to £520; New York → London owes no fixed compensation. Getting that wrong is the most expensive mistake the bot can make, so jurisdiction is resolved deterministically based on the departure airport, and the governing law gets a guaranteed place in the model's context.
 
 - **Government law and airline promises are kept apart.** Regulations say what a passenger is *entitled* to; contracts of carriage say what the airline *promised*. Retrieval reserves slots for both, and every source is labelled with LAW or AIRLINE in the prompt.
