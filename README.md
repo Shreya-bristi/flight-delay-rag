@@ -230,6 +230,14 @@ The API exports Prometheus metrics (`src/flight_delay/metrics.py`). Alert rules 
 https://github.com/user-attachments/assets/21752488-15c2-477c-a57d-8aa5eb7cf89e
 
 
+
+### Deployment & Connection Map Walkthrough
+
+[![Watch the deployment walkthrough](https://img.youtube.com/vi/JBMAd6md55k/maxresdefault.jpg)](https://www.youtube.com/watch?v=JBMAd6md55k)
+
+▶ [Watch the full deployment and connection map explanation on YouTube](https://www.youtube.com/watch?v=JBMAd6md55k)
+
+
 Full step-by-step procedure: [AWS_deployment.md](AWS_deployment.md).
 
 ## Testing
