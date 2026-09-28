@@ -135,34 +135,6 @@ what the law *entitles* you to, and what the carrier *promised*.
 
 ## Repository Structure
 
-```text
-.
-├── src/flight_delay/        # Application code
-│   ├── api.py               # FastAPI app and web UI
-│   ├── pipeline.py          # Turn planning, retrieval query, lanes, answer flow
-│   ├── jurisdiction.py      # Route parsing and the applicability matrix
-│   ├── retrieval.py         # Hybrid search, reranking, source balancing, context
-│   ├── generation.py        # LLM client, prompt, citation validation
-│   ├── followups.py         # Follow-up answers from conversation state
-│   ├── ingest.py            # PDF / Markdown / text parsing and chunking
-│   ├── store.py             # Postgres + pgvector store
-│   ├── tools.py             # AirLabs flight lookup
-│   └── metrics.py           # Prometheus metrics
-├── data/                    # Corpus: regulations, airline contracts, airport regions
-├── scripts/                 # Indexing, preflight checks, local run helpers
-├── evals/                   # Golden set, retrieval (Stage 1) and generation (Stage 2) evals
-├── tests/                   # Pytest suite
-├── deploy/                  # Prometheus, Grafana, Kubernetes, Helm, Terraform
-├── docs/                    # README images (demo GIF, architecture diagram)
-├── system_prompt.md         # The single system prompt
-├── Dockerfile
-├── docker-compose.yml
-├── Makefile
-├── RESULTS.md               # Evaluation results
-├── RUNBOOK.md               # Local runbook
-└── RUNBOOK_AWS.md           # AWS deployment runbook
-```
-
 ## Getting Started
 
 ### Prerequisites
