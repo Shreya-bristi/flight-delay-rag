@@ -24,6 +24,7 @@ cites its source. I focused primarily on US domestic and Europe bound operations
 
 ## Demo
 
+For the AWS architectural demo, refer to the [Deployment on AWS](#deployment-on-aws) section
 
 
 ## High-Level Architecture
