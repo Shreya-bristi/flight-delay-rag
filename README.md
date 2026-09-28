@@ -59,7 +59,7 @@ For the AWS architectural demo, refer to the [Deployment on AWS](#deployment-on-
 
 ## RAG Pipeline
 
-The difficult part of this project is retrieving the right legal premises for any specific route, then producing an answer that clearly shows where the information came from - law, airline policy, or live flight data. The index is built separately from passenger requests; the request path uses that verified index.
+The difficult part of this project is retrieving the right legal premises for any specific route, then producing an answer that clearly shows whether information came from law, airline policy, or live flight data. The index is built separately from passenger requests; the request path uses that verified index.
 
 ### 1. Evidence and indexing
 
@@ -71,17 +71,17 @@ The [`CORPUS` manifest](scripts/index_corpus.py) declares 17 source documents: E
 
 ### 2. Question planning and route
 
-[`plan_turn`](src/flight_delay/pipeline.py) classifies the request, carries forward conversation state when appropriate, extracts a carrier and flight number, and can look up a supported flight through AirLabs. The route is resolved in code. [`route_filters`](src/flight_delay/pipeline.py) separates **in-scope** regimes, whose text may be retrieved to explain applicability, from **governing** regimes, whose regulation gets a reserved opportunity to reach the final context.
+[`plan_turn`](src/flight_delay/pipeline.py) classifies the request, carries forward conversation state when appropriate, extracts a carrier and flight number, and can look up a supported flight through AirLabs. The route is resolved in code. [`route_filters`](src/flight_delay/pipeline.py) separates in-scope regimes (rules worth checking to determine whether they apply) from governing regimes (rules that apply to the flight and receive priority in the evidence sent to the model). For example, on a New York to Paris flight, the chatbot can retrieve EU261 to explain why it does not apply, while prioritizing the applicable U.S. rules.
 
-When a missing airport would change the answer, the bot asks for it. It can also decline an unsupported carrier. Common follow-ups can reuse a prior validated answer without another retrieval and generation call. Live status is shown as flight data, never treated as the legal authority for compensation.
+When a missing airport would change the answer, the bot asks for it. It can also decline an unsupported carrier. Common follow-ups can be answered without another retrieval and generation call. Live status is shown as flight data, never treated as the legal authority for compensation.
 
 **Why this design:** for a US carrier, London → New York and New York → London can have different fixed-compensation rules. Letting the generator infer the applicable regime from whatever passages happened to rank highest would be a poor place to make that decision.
 
 ### 3. Hybrid retrieval and reranking
 
-The live [`chunks` table](src/flight_delay/store.py) contains both pgvector embeddings and a generated PostgreSQL full-text column. [`HybridRetriever.retrieve`](src/flight_delay/retrieval.py) embeds the question, searches by cosine similarity, adds full-text matches missed by dense search, and adds targeted candidates for governing law and legal premises such as scope, remedy, or procedure. It reranks the resulting candidate pool with a local BGE cross-encoder, fuses ranking signals, and balances source types. The deployed main dense search requests **20 candidates**; the final context selects **up to 8 chunks**. Extra lexical and targeted-lane hits may enlarge the pool before reranking.
+The live [`chunks` table](src/flight_delay/store.py) contains both pgvector embeddings and a generated PostgreSQL full-text column. [`HybridRetriever.retrieve`](src/flight_delay/retrieval.py) embeds the question, searches by cosine similarity, adds full-text matches missed by dense search, and adds targeted candidates for governing law and legal premises such as scope, remedy, or procedure. It reranks the resulting candidate pool with a local BGE cross-encoder, fuses ranking signals, and balances source types. The main dense search first retrieves the 20 chunks most similar to the question. Full-text and targeted searches can add relevant chunks it missed. The system reranks the combined pool and selects up to 8 chunks as evidence for the model’s answer.
 
-**Why both searches:** semantic search handles paraphrases; full-text search helps with exact legal references. **Why balancing:** a relevant airline page must not crowd out the binding regulation or a condition that determines whether it applies.
+**Why both searches:** semantic search handles paraphrases; full-text search helps with exact legal references. **Why balancing:** the retriever should not fill all 8 evidence slots with airline pages just because their wording closely matches the question. An airline policy might describe compensation, but the model also needs the binding law and the condition that makes that law apply to the route. Balancing reserves room for those essential legal sources, even when an airline page ranks highly.
 
 ### 4. Generation and answer checks
 
