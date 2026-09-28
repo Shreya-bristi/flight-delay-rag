@@ -237,7 +237,7 @@ https://github.com/user-attachments/assets/21752488-15c2-477c-a57d-8aa5eb7cf89e
 
 ▶ [Watch the full deployment and connection map explanation on YouTube](https://www.youtube.com/watch?v=JBMAd6md55k)
 
-
+In this walkthrough, I explain how the deployment fits together behind the scenes, from the Docker containers to the Kubernetes resources running on EKS. I also go through how the API, PostgreSQL/pgvector, Services, NetworkPolicies, load balancer, and monitoring components connect, and what role each one plays in the overall architecture.
 Full step-by-step procedure: [AWS_deployment.md](AWS_deployment.md).
 
 ## Testing
