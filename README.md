@@ -59,7 +59,7 @@ For the AWS architectural demo, refer to the [Deployment on AWS](#deployment-on-
 
 ## RAG Pipeline
 
-The difficult part of this project is retrieving the right legal premises for the right route, then producing an answer that makes clear which statements come from law, airline policy, or live flight data. The index is built separately from passenger requests; the request path uses that verified index.
+The difficult part of this project is retrieving the right legal premises for any specific route, then producing an answer that clearly shows where the information came from - law, airline policy, or live flight data. The index is built separately from passenger requests; the request path uses that verified index.
 
 ### 1. Evidence and indexing
 
