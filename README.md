@@ -8,9 +8,9 @@
 
 Your flight is delayed four hours. Are you owed $600, $520, a refund, a hotel, or nothing? Most passengers don’t know, because the answer can depend on where the flight departed, which airline operated it, and whether the airline’s own contract promises more than the law requires.
 
-Flight Delay RAG is a chatbot came in my mind when my flight was delayed for 6 hours but I had to make it to the first day of class. That's been already over a year, I didn't know RAG then, AWS was just a buzzword to me. Now that I have started exploring world of platform Engineering, was like yeah..why not? Long story short my project combines live flight status(AirLabsAPI) with text retrieved from government regulations (US DOT / 14 CFR, EU261, UK261) and
+Flight Delay RAG is a chatbot came in my mind when my flight was delayed for 6 hours but I had to make it to the first day of class. That's been already over a year, I didn't know RAG then, AWS was just a buzzword to me. Now that I have started exploring world of platform Engineering, was like yeah..why not? Long story short, my project combines live flight status(AirLabsAPI) with text retrieved from government regulations (US DOT / 14 CFR, EU261, UK261) and
 airline policies (American, Delta, United, Southwest). Every factual sentence in an answer
-cites its source. I focused primarily on US domestic and Europe bound operations of these 4 carries.
+cites its source. I focused primarily on US domestic and Europe bound operations of these 4 carriers.
 
 ### What I had to get right
 
@@ -66,11 +66,11 @@ airline promised** on top of that law. This chatbot works out the governing regi
 route, retrieves the relevant regulation and airline text, and answers with the two kept apart:
 what the law *entitles* you to, and what the carrier *promised*.
 
-## Features
+## features
 
-- **Live flight lookup** — a flight number is resolved through AirLabs, and the real route and
+- **Live flight lookup**: a flight number is resolved through AirLabs, and the real route and
   delay decide which rules apply.
-- **Jurisdiction routing** — a pure-function applicability matrix selects the governing regime
+- **Jurisdiction routing**: a pure-function applicability matrix selects the governing regime
   (US DOT, EU261, UK261) from the origin and destination.
 - **Clarify once, then answer** — if the route is unclear, the bot asks one round of questions,
   then answers on a stated assumption.
