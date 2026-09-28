@@ -227,12 +227,8 @@ The API exports Prometheus metrics (`src/flight_delay/metrics.py`). Alert rules 
 
 <p align="center">
   <a href="docs/aws-deployment-demo-fast-hq.mp4">
-    <img src="docs/deployment.png" width="900" alt="AWS deployment demo">
+    <strong>▶ Watch the AWS deployment demo</strong>
   </a>
-</p>
-
-<p align="center">
-  <a href="docs/aws-deployment-demo-fast-hq.mp4"><strong>▶ Watch the AWS deployment demo</strong></a>
 </p>
 
 Full step-by-step procedure: [AWS_deployment.md](AWS_deployment.md).
