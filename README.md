@@ -225,11 +225,17 @@ The API exports Prometheus metrics (`src/flight_delay/metrics.py`). Alert rules 
 
 ## Deployment on AWS
 
-
+### AWS Deployment Demo
 
 https://github.com/user-attachments/assets/21752488-15c2-477c-a57d-8aa5eb7cf89e
 
+### Deployment Path
 
+<p align="center">
+  <img src="docs/aws-deployment-map.png"
+       width="100%"
+       alt="AWS EKS deployment and connection map">
+</p>
 
 ### Deployment & Connection Map Walkthrough
 
