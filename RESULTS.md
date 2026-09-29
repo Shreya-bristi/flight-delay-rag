@@ -103,8 +103,6 @@ passenger an uncited claim about money they're owed.
 
 - **Run all 50 questions through generation.** This needs either a paid tier or a resumable
   run that caches answers across days of free quota.
-- **Get the reference answers reviewed**, so factual correctness measures accuracy rather
-  than agreement with my drafts.
 - **Try a stronger generator** for citation discipline, measured with the same frozen judge
   and the same retrieval.
 - **Calibrate the confidence gate.** It's off in every run because its current thresholds
