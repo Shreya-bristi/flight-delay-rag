@@ -40,7 +40,7 @@ unsupported-airline case; a random 10 would often miss them.
 | metric | result | what it means here |
 |---|---|---|
 | **Required premise completeness** | **0.744** (32 of 43) | For each question I listed every fact the answer depends on (for example "UK261 applies to this flight", "delay of 3h+ triggers compensation", "the amount for this distance"). This is the share of questions where **every one** of those facts was in the retrieved context. It's the metric I optimised for, because a missing premise means the model has to guess or leave something out. |
-| **Primary authority coverage** | **0.722** | The share of required legal facts backed by the **binding text itself** (the EU261 article, the 14 CFR section) rather than only by guidance that paraphrases it. It matters because a passenger arguing with an airline needs the regulation, not a summary. |
+| **Primary authority coverage** | **0.722** |  How often the retrieved sources include the actual law (e.g. the EU261 article or the 14 CFR section), not just an official guide explaining it. It matters because a passenger arguing with an airline needs the regulation, not a summary. |
 | **Governing regime kept** | **1.000** | The law that governs the flight (decided by the departure airport) gets a guaranteed slot in the context. This checks that the slot survives the token budget in every case. It once read 0.93, and that turned out to be a real bug: the guaranteed chunk was the first one dropped when the context got tight. |
 | **Off-carrier chunks** | **0** | A United question never gets Delta's contract in its context. |
 | **Cases with zero evidence** | **0** | Every answerable question retrieved at least some gold text. |
