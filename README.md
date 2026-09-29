@@ -1,4 +1,4 @@
-# Flight Delay RAG
+# Flight Passenger Rights RAG Assistant
 
 > Active project: the core system is built, evaluated, and has been deployed on AWS. Feedback welcome.
 
