@@ -133,9 +133,9 @@ I focused mostly on US domestic and Europe operations. For a flight outside the 
 
 ### Configuration
 
-Local settings live in an uncommitted `.env` at the repository root: database DSN, model endpoint and key, AirLabs key, and retrieval/generation settings. See `.env.example` for the required names.
+Local settings live in an uncommitted `.env` at the repository root: database DSN, model endpoint and key, AirLabs key, Google AI Studio API key and retrieval/generation settings. 
 
-### From the repository root
+### From the repository roo
 
 ```bash
 make install        # core dependencies
@@ -151,6 +151,7 @@ make run            # API and browser UI at http://localhost:8000
 make up                 # postgres + api + prometheus + grafana
 make index-container    # build the index using the application image
 ```
+For local deployment, see [local_development.md](local_development.md).
 
 ## Repository Map
 
