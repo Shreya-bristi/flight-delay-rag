@@ -1,7 +1,6 @@
 # Results
 
-These are the numbers from my final evaluation runs, the metrics that are strong and the ones
-that aren't, and what each metric means for this project.
+These are the numbers from my final evaluation runs, all the metrics, and what each metric means for this project.
 
 ## How I evaluate
 
@@ -14,22 +13,20 @@ The test set is a hand-built **golden set of 50 questions**. It covers:
 - airlines it doesn't support
 
 More than half the cases are edge cases on purpose: ambiguous routes, a regime that doesn't
-apply, exception clauses, multi-leg trips, US territories.
+apply, exception clauses, multi-leg trips.
 
 Evaluation runs in two stages:
 
-1. **Retrieval.** Does the search put the right regulation and airline text in front of the
-   model? This needs no LLM, runs on the real stack (PostgreSQL + pgvector, bge-large-en-v1.5,
+1. **Retrieval.** Measures whether  the search put the right regulation and airline text in front   of the model. This needs no LLM, runs on the real stack (PostgreSQL + pgvector, bge-large-en-v1.5,
    bge-reranker-base), and scores the **43 answerable questions**. The other 7 are questions
    where the right move is to ask or decline, so there is nothing to retrieve.
-2. **Generation.** Is the answer correct, grounded in the sources and properly cited, and
-   does the bot ask or decline when it should? The generator is `openai/gpt-oss-20b` on Groq.
-   A separate judge, Gemini Flash-Lite, scores the answers, so a model never grades itself.
+2. **Generation.** measures whether the answer is correct, grounded in the sources and properly cited. The generator is `openai/gpt-oss-20b` on Groq.
+A separate judge, Gemini Flash-Lite, scores the answers, so a model never grades itself.
 
 | run | file | scope |
 |---|---|---|
 | Retrieval (final) | `evals/runs/retrieval/latest.json` | all 43 scored questions, 512-token chunks, 15% overlap |
-| Generation (final) | `evals/runs/generation/20260920T032529.json` | 10-question sample, stratified by category |
+| Generation (final) | `evals/runs/generation/20260920T032529.json` | 10-question sample, as groq throws ratelimit_exceeded error for 50 questions in a go |
 
 Generation is a sample because of Groq's free tier. One question costs about 5,700 tokens,
 and the free limit is 200,000 tokens a day, which a 50-question run with retries doesn't fit
