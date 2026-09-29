@@ -70,7 +70,7 @@ Things I measured and didn't adopt, because they didn't help:
 
 | metric | result | explanation |
 |---|---|---|
-| **Faithfulness** | 0.667 | The share of the answer's claims the judge could trace to the sources the model was actually given: the source blocks, the flight data and the prompt rules. About a third of the claims weren't clearly supported by that evidence. |
+| **Faithfulness** | 0.70 | The share of the answer's claims the judge could trace to the sources the model was actually given: the source blocks, the flight data and the prompt rules. About a third of the claims weren't clearly supported by that evidence. |
 | **Citation coverage** | **1.000** | Every answer shown to a user cited its factual sentences. The validator rejects an answer with an uncited legal, money or deadline claim before the user sees it. |
 | **Clarification accuracy** | **1.000** | When the departure airport decides which law applies and the question doesn't give it, the bot asks once instead of guessing. |
 | **Abstention accuracy** | **1.000** | Out-of-scope or trick questions get a decline, not an answer. |
