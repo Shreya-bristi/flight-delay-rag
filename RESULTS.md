@@ -47,23 +47,9 @@ unsupported-airline case; a random 10 would often miss them.
 | **Dense search recall vs exact** | **1.000** | The approximate vector search (HNSW) returns the same top 20 as an exact scan. With pgvector's defaults it didn't (0.965, and as low as 0.70 on some queries), so I tuned `ef_search` and iterative scan. |
 | **Gold passage in one chunk** | **0.94** | At 512 tokens, 94% of the passages that answer a question fall inside a single chunk instead of being split across two. |
 
-**How far it moved.** The same metrics on my earlier retrieval design, same golden set:
-
-| metric | before | final |
-|---|---|---|
-| Required premise completeness | 0.302 (13 of 43) | **0.744** (32 of 43) |
-| Primary authority coverage | 0.313 | **0.722** |
-| Evidence recall | 0.474 | **0.571** |
-
-Most of that came from **search lanes**. For a question like "what am I owed?", each regime
-that applies gets extra targeted searches (compensation amount, care, refund, scope), and the
-best hit from each lane is guaranteed a seat in the context. Without the seats, the right
-article was often found and then lost in the final ranking.
-
 Things I measured and didn't adopt, because they didn't help:
 
 - 384-token chunks
-- a 9th context slot
 - a cap on chunks from the same section
 
 ## Retrieval: what's weak
@@ -75,9 +61,7 @@ Things I measured and didn't adopt, because they didn't help:
 | **Section recall@3** | 0.262 | About 26% of the required sections appear in the top 3 results. Many questions need evidence from several different sections, so three retrieval slots are often not enough to include everything.|
 | **nDCG@5** | 0.364 | A ranking-quality score for the top 5. It ranks the whole candidate pool before source balancing and lane seats, so it undersells what the model actually sees. |
 | **MRR** | 0.647 | Mean reciprocal rank of the first gold chunk, on the same pre-balancing ranking. The first useful chunk is usually near the top, but not always first. |
-| **Duplicate-section chunks** | 46 (across 43 questions) | Sometimes two chunks of the same section take two slots. Capping this lowered recall when I tried it, so I left it. |
-| **Reranker truncation** | 47% of pairs | bge-reranker-base reads 512 tokens, and about half of (question + chunk) pairs are longer, so the reranker sees a cut-off chunk. A longer-context reranker would help. |
-| **Retrieval latency** | ~6.2 s per question | Measured on my 4 GB laptop GPU with the cross-encoder reranking the whole candidate pool plus the lane searches. |
+
 
 11 questions still miss at least one required premise. Six of them get no targeted lane at
 all, and two get regulator guidance where the binding article is required. One is a real gap in my corpus: the
