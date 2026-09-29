@@ -87,7 +87,7 @@ The live [`chunks` table](src/flight_delay/store.py) contains both pgvector embe
 
 [`build_context`](src/flight_delay/generation.py) admits guaranteed governing-law chunks before spending the token budget on other sources. It labels each source as a regulation, regulator guidance, or airline policy, assigns `[S1]`-style markers, and keeps a map from each marker to the actual section and URL. The default generator is hosted Groq `openai/gpt-oss-20b`; the API pods run embedding and reranking locally on CPU.
 
-After generation, [`validate_answer`](src/flight_delay/generation.py) rejects invented source markers and factual-looking sentences without citations. [`RagPipeline.run`](src/flight_delay/pipeline.py) can send a targeted retry note and withholds an answer that still fails its checks, unless removing whole uncited bullet points leaves an answer that passes them with at least one citation. The validator checks **citation structure and coverage**, not whether a cited passage truly supports a claim; factual support is evaluated separately. A confidence gate exists in code, but the [deployed ConfigMap](deploy/k8s/18-config.yaml) has it **disabled**.
+After generation, [`validate_answer`](src/flight_delay/generation.py) rejects invented source markers and factual-looking sentences without citations. [`RagPipeline.run`](src/flight_delay/pipeline.py) can send a targeted retry note and withhold an answer that still fails its checks. The validator checks **citation structure and coverage**, not whether a cited passage truly supports a claim; factual support is evaluated separately. Confidence gate is disabled in my code.
 
 ## Evaluation
 
