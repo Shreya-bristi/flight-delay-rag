@@ -37,7 +37,7 @@ unsupported-airline case; a random 10 would often miss them.
 
 ## Retrieval: what works
 
-| metric | result | what it means here |
+| metric | result | explanation |
 |---|---|---|
 | **Required premise completeness** | **0.744** (32 of 43) | For each question I listed every fact the answer depends on (for example "UK261 applies to this flight", "delay of 3h+ triggers compensation", "the amount for this distance"). This is the share of questions where **every one** of those facts was in the retrieved context. It's the metric I optimised for, because a missing premise means the model has to guess or leave something out. |
 | **Primary authority coverage** | **0.722** |  How often the retrieved sources include the actual law (e.g. the EU261 article or the 14 CFR section), not just an official guide explaining it. It matters because a passenger arguing with an airline needs the regulation, not a summary. |
@@ -54,7 +54,7 @@ Things I measured and didn't adopt, because they didn't help:
 
 ## Retrieval: what's weak
 
-| metric | result | what it means here, and why it's low |
+| metric | result | explanation |
 |---|---|---|
 | **Evidence recall** | 0.571 | The share of **all** useful gold text that was retrieved, not just the required facts. Many questions have more relevant text than fits in 8 chunks, so this won't reach 1.0 by design. It's the completeness metric above that decides whether the answer can be right. |
 | **Context precision** | 0.223 | About 22% of the text sent to the model directly matches the gold evidence. This looks low because the gold answer is usually a short clause, while each retrieved chunk can contain much more surrounding text. |
@@ -74,7 +74,7 @@ topic filter removes for a cancellation question.
 
 10-question sample. `n` is the number of questions each metric applies to.
 
-| metric | result | n | what it means here |
+| metric | result | n | explanation |
 |---|---|---|---|
 | **Citation validity** | **1.000** | 5 | Every `[Sn]` citation points to a source that was actually in the context. There were no invented citations. |
 | **Citation coverage** | **1.000** | shown answers | Every answer shown to a user cited its factual sentences. The validator rejects an answer with an uncited legal, money or deadline claim before the user sees it. |
@@ -86,13 +86,9 @@ topic filter removes for a cancellation question.
 | **Truncated or oversized calls** | **0** | 13 calls | No answer was cut off by the token cap, and no request exceeded the model's window. |
 | **Cost** | **$0.0007 per question** | 8 | Measured from token usage at Groq's list price. A full 44-question generation pass would cost about $0.03. |
 
-The four safety gates are checked on one question each in this sample, so they show the
-behaviour works, not a rate. The same routing is checked on all 50 questions in the free
-routing pass, which runs with no model.
-
 ## Generation: what's weak
 
-| metric | result | n | what it means here, and why |
+| metric | result | n | explanation |
 |---|---|---|---|
 | **Factual correctness** | 0.070 (0.187 on answers delivered) | 8 (3) | The judge compares the answer's claims with my reference answer. Any question that produced no answer scores 0, which is what drags the first figure down. The references are my own drafts and aren't reviewed yet, so this is a consistency signal, not verified accuracy. |
 | **Faithfulness** | 0.667 | 3 | The share of the answer's claims the judge could trace to the sources the model was actually given: the source blocks, the flight data and the prompt rules, never the reference answer. About a third of the claims weren't clearly supported by that evidence. |
