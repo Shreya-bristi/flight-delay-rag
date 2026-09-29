@@ -52,15 +52,16 @@ Things I measured and didn't adopt, because they didn't help:
 - 384-token chunks
 - a cap on chunks from the same section
 
-## Retrieval: what's weak
+## Retrieval: what's lower
 
 | metric | result | explanation |
 |---|---|---|
-| **Evidence recall** | 0.571 | The share of **all** useful gold text that was retrieved, not just the required facts. Many questions have more relevant text than fits in 8 chunks, so this won't reach 1.0 by design. It's the completeness metric above that decides whether the answer can be right. |
-| **Context precision** | 0.223 | About 22% of the text sent to the model directly matches the gold evidence. This looks low because the gold answer is usually a short clause, while each retrieved chunk can contain much more surrounding text. |
-| **Section recall@3** | 0.262 | About 26% of the required sections appear in the top 3 results. Many questions need evidence from several different sections, so three retrieval slots are often not enough to include everything.|
-| **nDCG@5** | 0.364 | A ranking-quality score for the top 5. It ranks the whole candidate pool before source balancing and lane seats, so it undersells what the model actually sees. |
+| **Evidence recall** | 0.571 | The share of all the helpful text for a question actually reached the model. Many questions have more relevant text than fits in 8 chunks, so this won't reach 1.0 by design. It's the completeness metric above that decides whether the answer can be right. |
 | **MRR** | 0.647 | Mean reciprocal rank of the first gold chunk, on the same pre-balancing ranking. The first useful chunk is usually near the top, but not always first. |
+| **Context precision** | 0.323 | About 32% of the text sent to the model directly matches the gold evidence. This looks low because the gold answer is usually a short clause, while each retrieved chunk can contain much more surrounding text. |
+| **nDCG@5** | 0.364 | 
+| nDCG@5 | 0.364 | How close the top 5 search results are to the ideal order, from 0 to 1, where 1 means the most relevant sections are at the very top. It counts each section once, so repeats don't raise the score. It is measured on the reranker's ordering before the final 8 chunks are chosen. Some key legal facts are low in that ordering and only reach the model through reserved slots (lane seats and source balancing), so this score undersells what the model actually sees. |
+
 
 ---
 
