@@ -91,14 +91,14 @@ After generation, [`validate_answer`](src/flight_delay/generation.py) rejects in
 
 ## Evaluation
 
-The [golden set](evals/golden_set.jsonl) contains 50 cases, including answerable routes, ambiguous requests, unsupported carriers, and traps. Retrieval is scored on the answerable cases; generation has a separate evaluation stage.
+The [golden set](evals/golden_set.jsonl) contains 50 cases, including answerable routes, ambiguous requests, unsupported carriers, and traps. Retrieval is scored on the answerable cases; generation has a separate evaluation stage. Generation quality is evaluated using Gemini 3.5 Flash-Lite as an LLM judge.
 
 | Stage | What was measured | Current status |
 |---|---|---|
-| [Retrieval](evals/retrieval_eval.py) | Required-premise completeness, primary-authority coverage, evidence recall, ranking | Latest selected run: **32/43** answerable cases have every required premise; evidence recall **0.571**, MRR **0.647**. Eleven cases still miss a premise. |
-| [Generation](evals/generation_eval.py) | Faithfulness, factual correctness, citations, clarification and abstention | A 10-case sample exists. The authoritative full 50-case run **has not completed**, so its results are provisional. |
+| [Retrieval](evals/retrieval_eval.py) | Required-premise completeness, primary-authority coverage, evidence recall, MRR | Latest selected run: **32/43** answerable cases have every required premise; evidence recall **0.571**, MRR **0.647**. Eleven cases still miss a premise. |
+| [Generation](evals/generation_eval.py) | Faithfulness, citations, clarification and abstention | A 10-case sample was taken as groq throws ratelimit_exit error on free tier. |
 
-The retrieval numbers measure **evidence available to the generator**, not the accuracy of 32 final answers. See [`RESULTS.md`](RESULTS.md) and the [latest retrieval run](evals/runs/retrieval/latest.json) for definitions and run records. The full generation evaluation remains an open task.
+The retrieval numbers measure **evidence available to the generator**, not the accuracy of 32 final answers. See [`RESULTS.md`](RESULTS.md) for metric definitions. The full generation evaluation is still due.
 
 ## Supported Scope
 
@@ -108,7 +108,7 @@ The retrieval numbers measure **evidence available to the generator**, not the a
 | Routes | US domestic and these carriers' EU/UK operations |
 | Legal sources | U.S. DOT / 14 CFR, EU261, UK261, plus regulator guidance |
 
-A flight outside the covered route or carrier set is not evidence that a particular foreign law applies. The assistant asks for missing route details or refers the passenger to the relevant authority where its sources do not establish an answer.
+I focused mostly on US domestic and Europe operations. For a flight outside the covered route or carrier set, the chatbot doesn't provide any information. The assistant asks for missing route details or refers the passenger to the relevant authority when given the flight number.
 
 ## Tech Stack
 
@@ -119,7 +119,7 @@ A flight outside the covered route or carrier set is not evidence that a particu
 | Embeddings and reranking | `bge-large-en-v1.5`; `bge-reranker-base` |
 | Answer generation | Groq `openai/gpt-oss-20b` through an OpenAI-compatible API |
 | Live flight status | AirLabs API |
-| Evaluation | Custom golden-set retrieval metrics; Ragas-assisted generation evaluation |
+| Evaluation | Based on custom golden-set using gemini-3.5-flash-lite as a judge |
 | Local and cloud deployment | Docker Compose; AWS EKS with Terraform, eksctl, and Helm |
 
 ## Run Locally
