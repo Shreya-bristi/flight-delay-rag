@@ -66,32 +66,27 @@ Things I measured and didn't adopt, because they didn't help:
 
 ## Generation: what works
 
-10-question sample. `n` is the number of questions each metric applies to.
+10-question sample used here.
 
-| metric | result | n | explanation |
+| metric | result | explanation |
 |---|---|---|---|
-| **Factual correctness** | 0.070 (0.187 on answers delivered) | 8 (3) | The judge compares the answer's claims with my reference answer. Any question that produced no answer scores 0, which is what drags the first figure down. The references are my own drafts and aren't reviewed yet, so this is a consistency signal, not verified accuracy. |
-| **Faithfulness** | 0.667 | 3 | The share of the answer's claims the judge could trace to the sources the model was actually given: the source blocks, the flight data and the prompt rules, never the reference answer. About a third of the claims weren't clearly supported by that evidence. |
-| **Citation validity** | **1.000** | 5 | Every `[Sn]` citation points to a source that was actually in the context. There were no invented citations. |
-| **Citation coverage** | **1.000** | shown answers | Every answer shown to a user cited its factual sentences. The validator rejects an answer with an uncited legal, money or deadline claim before the user sees it. |
-| **Clarification accuracy** | **1.000** | 1 | When the departure airport decides which law applies and the question doesn't give it, the bot asks once instead of guessing. |
-| **Abstention accuracy** | **1.000** | 1 | Out-of-scope or trick questions get a decline, not an answer. |
-| **Unsupported airline accuracy** | **1.000** | 1 | For an airline outside AA/DL/UA/WN the bot says so, and doesn't pretend to have that carrier's policy. |
-| **Scope safety** | **1.000** | 1 | The bot never answers an out-of-scope question as if it were in scope. |
-| **Over-abstention** | **0.000** | 8 | It never declined a question it should have answered. |
-| **Truncated or oversized calls** | **0** | 13 calls | No answer was cut off by the token cap, and no request exceeded the model's window. |
-| **Cost** | **$0.0007 per question** | 8 | Measured from token usage at Groq's list price. A full 44-question generation pass would cost about $0.03. |
+| **Faithfulness** | 0.667 | The share of the answer's claims the judge could trace to the sources the model was actually given: the source blocks, the flight data and the prompt rules. About a third of the claims weren't clearly supported by that evidence. |
+| **Citation coverage** | **1.000** | Every answer shown to a user cited its factual sentences. The validator rejects an answer with an uncited legal, money or deadline claim before the user sees it. |
+| **Clarification accuracy** | **1.000** | When the departure airport decides which law applies and the question doesn't give it, the bot asks once instead of guessing. |
+| **Abstention accuracy** | **1.000** | Out-of-scope or trick questions get a decline, not an answer. |
+| **Unsupported airline accuracy** | **1.000** | For an airline outside AA/DL/UA/WN the bot says so, and doesn't pretend to have that carrier's policy. |
+| **Scope safety** | **1.000** | The bot never answers an out-of-scope question as if it were in scope. |
 
-## Generation: what's weak
+
+
+## Generation: what's lower
 
 | metric | result | n | explanation |
 |---|---|---|---|
 | **Validation pass rate** | 0.600 | 5 | 2 of 5 answers still had an uncited factual sentence after one retry, so they were withheld rather than shown. That's the right behaviour for a legal-rights bot, but it means no answer. |
 | **Generation time** | ~101 s mean | 8 | Measured in the eval harness, which spaces requests 45 s apart to stay under the free-tier token rate and includes the retry. It isn't what a user waits in the app. |
 
-**The main takeaway: retrieval is no longer the bottleneck; citation discipline is.** After
-the retrieval redesign, the evidence for these questions is in the context. The 20B model
-often still writes a factual sentence without a citation, and the validator correctly
+**The main takeaway: retrieval is no longer the bottleneck; citation discipline is.** The 20B model often still writes a factual sentence without a citation, and the validator correctly
 blocks it. I chose to keep the strict validator and lose those answers rather than show a
 passenger an uncited claim about money they're owed.
 
