@@ -69,7 +69,7 @@ Things I measured and didn't adopt, because they didn't help:
 10-question sample used here.
 
 | metric | result | explanation |
-|---|---|---|---|
+|---|---|---|
 | **Faithfulness** | 0.667 | The share of the answer's claims the judge could trace to the sources the model was actually given: the source blocks, the flight data and the prompt rules. About a third of the claims weren't clearly supported by that evidence. |
 | **Citation coverage** | **1.000** | Every answer shown to a user cited its factual sentences. The validator rejects an answer with an uncited legal, money or deadline claim before the user sees it. |
 | **Clarification accuracy** | **1.000** | When the departure airport decides which law applies and the question doesn't give it, the bot asks once instead of guessing. |
@@ -81,10 +81,10 @@ Things I measured and didn't adopt, because they didn't help:
 
 ## Generation: what's lower
 
-| metric | result | n | explanation |
-|---|---|---|---|
-| **Validation pass rate** | 0.600 | 5 | 2 of 5 answers still had an uncited factual sentence after one retry, so they were withheld rather than shown. That's the right behaviour for a legal-rights bot, but it means no answer. |
-| **Generation time** | ~101 s mean | 8 | Measured in the eval harness, which spaces requests 45 s apart to stay under the free-tier token rate and includes the retry. It isn't what a user waits in the app. |
+| metric | result | explanation |
+|---|---|---|
+| **Validation pass rate** | 0.600 | 2 of 5 answers still had an uncited factual sentence after one retry, so they were withheld rather than shown. That's the right behaviour for a legal-rights bot, but it means no answer. |
+| **Generation time** | ~101 s mean | Measured in the eval harness, which spaces requests 45 s apart to stay under the free-tier token rate and includes the retry. It isn't what a user waits in the app. |
 
 **The main takeaway: retrieval is no longer the bottleneck; citation discipline is.** The 20B model often still writes a factual sentence without a citation, and the validator correctly
 blocks it. I chose to keep the strict validator and lose those answers rather than show a
