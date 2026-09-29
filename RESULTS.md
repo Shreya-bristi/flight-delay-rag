@@ -62,12 +62,6 @@ Things I measured and didn't adopt, because they didn't help:
 | **nDCG@5** | 0.364 | A ranking-quality score for the top 5. It ranks the whole candidate pool before source balancing and lane seats, so it undersells what the model actually sees. |
 | **MRR** | 0.647 | Mean reciprocal rank of the first gold chunk, on the same pre-balancing ranking. The first useful chunk is usually near the top, but not always first. |
 
-
-11 questions still miss at least one required premise. Six of them get no targeted lane at
-all, and two get regulator guidance where the binding article is required. One is a real gap in my corpus: the
-only text saying US territories count as the US sits in a denied-boarding section that the
-topic filter removes for a cancellation question.
-
 ---
 
 ## Generation: what works
